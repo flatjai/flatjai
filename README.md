@@ -58,6 +58,7 @@ Switch to TACC: write `SERVICE_BASE_URL` into `deploy/tacc/server-url.txt`, set 
 | `agent/events.py`, `agent/runs.py` | Numbered, persisted events; runs, sessions, idempotency, resume (9, 10) |
 | `tools/search.py`, `tools/fetch.py`, `tools/extract.py`, `tools/cost.py` | Tools with typed contracts (6) |
 | `tools/cache.py`, `storage/` | Page, search and extraction caches; Postgres store; blob store (7, 8) |
+| `agent/ask.py` | What to ask the agent: the listing's open questions as a copyable message (decision 0006) |
 | `tools/preview.py` | Rent and district from list-page cards and listing pages: skip what surely cannot fit before the model (decision 0005) |
 | `tools/geocode.py`, `tools/transit.py` | Place a home (Address Lookup Service) and estimate its commute by MTR or bus (6, decision 0005) |
 | `data/mtr.json`, `scripts/build_mtr.py` | MTR stations and lines from MTR Open Data and Wikipedia, built once |

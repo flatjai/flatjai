@@ -54,6 +54,7 @@ export type Commute = {
 
 export type Card = {
   listing_id: number;
+  ask?: { questions: string[]; message: string };
   commute?: Commute | null;
   listing: Listing;
   cost: Cost;

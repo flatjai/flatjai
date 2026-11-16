@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowSquareOut, CaretDown, Check, Question, Train, X } from "@phosphor-icons/react";
+import { ArrowSquareOut, CaretDown, ChatCircleText, Check, Copy, Question, Train, X } from "@phosphor-icons/react";
 import { useState } from "react";
 
 import type { Card, Check as CheckT, CostItem } from "@/lib/api";
@@ -65,6 +65,8 @@ const portalName = (p: string) => PORTAL_NAMES[p] ?? p.charAt(0).toUpperCase() +
 export function ListingCard({ card, rank = null, reasons = [], campus = null }: Props) {
   const { listing: l, cost, commute } = card;
   const [open, setOpen] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const [copied, setCopied] = useState(false);
   const ev = l.evidence;
   const size = l.saleable_sqft ? `${l.saleable_sqft} ft²` : l.gross_sqft ? `${l.gross_sqft} ft² gross` : null;
   const beds = l.bedrooms === null ? null : l.bedrooms === 0 ? "Studio" : `${l.bedrooms} bed`;
@@ -169,6 +171,30 @@ export function ListingCard({ card, rank = null, reasons = [], campus = null }: 
         </div>
       ) : null}
 
+      {asking && card.ask ? (
+        <div className="fj-rise flex flex-col gap-3 rounded-xl bg-raised p-4">
+          <p className="text-xs text-muted">
+            The listing leaves these open. Copy the message and send it to the agent yourself; FlatJai never
+            contacts anyone.
+          </p>
+          <pre className="max-h-56 overflow-auto rounded-lg bg-bg p-3 font-sans text-sm leading-relaxed whitespace-pre-wrap text-fg">
+            {card.ask.message}
+          </pre>
+          <button
+            onClick={() => {
+              navigator.clipboard?.writeText(card.ask!.message).then(() => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1600);
+              });
+            }}
+            className="fj-sunset flex items-center gap-1.5 self-start rounded-lg px-3 py-1.5 text-sm font-semibold"
+          >
+            {copied ? <Check size={14} weight="bold" /> : <Copy size={14} weight="bold" />}
+            {copied ? "Copied" : "Copy message"}
+          </button>
+        </div>
+      ) : null}
+
       <footer className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line-faint pt-3 text-xs">
         <a
           href={l.source_url}
@@ -179,6 +205,12 @@ export function ListingCard({ card, rank = null, reasons = [], campus = null }: 
           Photos &amp; details on {portalName(l.portal)}
           <ArrowSquareOut size={13} weight="bold" />
         </a>
+        {card.ask?.questions.length ? (
+          <button onClick={() => setAsking(!asking)} className="flex items-center gap-1 text-muted hover:text-fg">
+            <ChatCircleText size={13} weight="fill" />
+            What to ask ({card.ask.questions.length})
+          </button>
+        ) : null}
         <button onClick={() => setOpen(!open)} className="flex items-center gap-1 text-muted hover:text-fg">
           Costs
           <CaretDown size={12} weight="bold" className={`transition-transform ${open ? "rotate-180" : ""}`} />

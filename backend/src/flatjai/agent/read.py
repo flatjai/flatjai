@@ -21,6 +21,7 @@ from ..tools.preview import preview_from_page
 from ..tools.search import SearchResult
 from ..tools.transit import CAMPUSES, Commute, commute, station_named_in
 from ..tracing import span
+from .ask import ask_for
 from .context import RunContext
 from .match import hard_checks, quick_reject, with_commute
 from .plan import campus_key
@@ -51,7 +52,7 @@ async def read_stage(ctx: RunContext, state: RunState) -> Stage:
                 state.matches.append(match)
             await ctx.bus.emit("observation", **observation(url, match, reason))
             if match is not None and match.fits:
-                await ctx.bus.emit("card", **card(match))
+                await ctx.bus.emit("card", **card(match, profile))
             in_flight = sum(not t.done() for t in tasks)
             await ctx.bus.emit("progress", **state.counters(), in_flight=in_flight)
             if len(state.fits()) >= ctx.budget.shortlist_size:
@@ -193,7 +194,7 @@ def observation(url: str, match: Match | None, reason: str) -> dict:
     }
 
 
-def card(m: Match) -> dict:
+def card(m: Match, profile: Profile) -> dict:
     return {
         "listing_id": m.listing_id,
         "listing": m.listing,
@@ -202,4 +203,5 @@ def card(m: Match) -> dict:
         "fetched_at": m.fetched_at,
         "unverified_fields": m.dropped,
         "commute": m.commute,
+        "ask": ask_for(Listing.model_validate(m.listing), m.checks, profile).model_dump(),
     }
