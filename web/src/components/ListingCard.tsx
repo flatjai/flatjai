@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowSquareOut, Bed, CaretDown, Check, Question, Ruler, X } from "@phosphor-icons/react";
+import { ArrowSquareOut, Bed, CaretDown, Check, Question, Ruler, Train, X } from "@phosphor-icons/react";
 import { useState } from "react";
 
 import type { Card, Check as CheckT, CostItem } from "@/lib/api";
@@ -12,6 +12,7 @@ const CHECK_LABEL: Record<string, string> = {
   bedrooms: "Bedrooms",
   move_in: "Move-in",
   area: "Area",
+  commute: "Commute",
 };
 
 const CHECK_STYLE = {
@@ -102,6 +103,24 @@ export function ListingCard({ card, rank = null, reasons = [] }: Props) {
           ) : null}
         </div>
       </div>
+
+      {card.commute ? (
+        <p
+          className="flex items-center gap-2 text-sm text-fg"
+          title={card.commute.legs.map((l) => `${l.text}: ${Math.round(l.minutes)} min`).join("\n")}
+        >
+          <Train size={16} weight="fill" className="flex-none text-sky" />
+          <span className="font-medium tabular-nums">~{card.commute.minutes} min</span>
+          <span className="min-w-0 truncate text-muted">
+            {card.commute.legs.map((l) => l.text).join(" → ")}
+          </span>
+          {card.commute.precision === "area" ? (
+            <span className="flex-none text-xs text-faint" title="The building could not be placed; estimated from the district">
+              (area)
+            </span>
+          ) : null}
+        </p>
+      ) : null}
 
       {reasons.length ? (
         <ul className="fj-sunset-soft flex flex-col gap-1.5 rounded-xl px-4 py-3 text-sm text-fg">

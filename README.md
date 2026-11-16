@@ -12,7 +12,7 @@ missing) -> Plan -> Search -> Read -> Match -> Reflect (re-plan or read more) ->
 the UI over server-sent events. Every figure is checked against its page and every hard limit in
 code; the answer's claims are checked against the facts. Runs, events and traces are stored in
 Postgres, interrupted runs resume, and every run can be inspected at `/runs`.
-Listings that surely cannot fit are skipped before the model (decision 0005). Not yet: real commute times (M3); frozen snapshot, record/replay, query suite and CI (M4).
+Commute is an offline estimate (MTR or bus, decision 0005), shown as "~N min". Not yet: OpenTripPlanner; frozen snapshot, record/replay, query suite and CI (M4).
 
 ## Run it
 Needs [uv](https://docs.astral.sh/uv/), Docker, Node + pnpm and [Ollama](https://ollama.com)
@@ -59,6 +59,8 @@ Switch to TACC: write `SERVICE_BASE_URL` into `deploy/tacc/server-url.txt`, set 
 | `tools/search.py`, `tools/fetch.py`, `tools/extract.py`, `tools/cost.py` | Tools with typed contracts (6) |
 | `tools/cache.py`, `storage/` | Page, search and extraction caches; Postgres store; blob store (7, 8) |
 | `tools/preview.py` | Rent and district from list-page cards and listing pages: skip what surely cannot fit before the model (decision 0005) |
+| `tools/geocode.py`, `tools/transit.py` | Place a home (Address Lookup Service) and estimate its commute by MTR or bus (6, decision 0005) |
+| `data/mtr.json`, `scripts/build_mtr.py` | MTR stations and lines from MTR Open Data and Wikipedia, built once |
 | `tracing.py` | Spans for stages, model and tool calls -> run inspector (13) |
 
 Decisions are in `docs/decisions/`.

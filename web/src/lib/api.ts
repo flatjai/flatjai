@@ -40,8 +40,12 @@ export type CostItem = { label: string; hkd: number; assumed: boolean };
 export type Cost = { monthly_hkd: number; move_in_hkd: number; monthly_items: CostItem[]; move_in_items: CostItem[] };
 export type Check = { name: string; ok: boolean | null; detail: string; value: number | null };
 
+export type CommuteLeg = { mode: "walk" | "bus" | "mtr"; text: string; minutes: number };
+export type Commute = { minutes: number; legs: CommuteLeg[]; method: string; precision: "building" | "area" };
+
 export type Card = {
   listing_id: number;
+  commute?: Commute | null;
   listing: Listing;
   cost: Cost;
   checks: Check[];
