@@ -41,7 +41,14 @@ export type Cost = { monthly_hkd: number; move_in_hkd: number; monthly_items: Co
 export type Check = { name: string; ok: boolean | null; detail: string; value: number | null };
 
 export type CommuteLeg = { mode: "walk" | "bus" | "mtr"; text: string; minutes: number };
-export type Commute = { minutes: number; legs: CommuteLeg[]; method: string; precision: "building" | "area" };
+export type RoutePlace = { name: string; kind: "home" | "station" | "campus"; lat: number; lon: number };
+export type Commute = {
+  minutes: number;
+  legs: CommuteLeg[];
+  method: string;
+  precision: "building" | "area";
+  route?: RoutePlace[];
+};
 
 export type Card = {
   listing_id: number;
@@ -185,4 +192,16 @@ async function getJson<T>(path: string): Promise<T> {
 }
 
 export const listRuns = () => getJson<RunInfo[]>("/runs");
+
+export type Turn = {
+  id: string;
+  brief: string;
+  status: string;
+  started_at: string;
+  ended_at: string | null;
+  model: string;
+  homes: number;
+};
+export type Conversation = { session_id: string; started_at: string; last_at: string; runs: Turn[] };
+export const listConversations = () => getJson<Conversation[]>("/sessions");
 export const getTrace = (runId: string) => getJson<Trace>(`/runs/${runId}/trace`);
