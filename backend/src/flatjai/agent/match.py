@@ -200,3 +200,16 @@ def promise(preview: ListingPreview | None, profile: Profile) -> int:
         return 0
     return 1
 
+
+def with_commute(
+    checks: list[Check], minutes: int, summary: str, profile: Profile, precision: str
+) -> list[Check]:
+    """The commute estimate replaces the interim area check. With a limit it is a hard check;
+    an area-level location (the district, not the building) is marked as such in the detail."""
+    rest = [c for c in checks if c.name != "area"]
+    where = "" if precision == "building" else " (from the district; building not found)"
+    detail = f"~{minutes} min to {profile.campus}: {summary}{where}"
+    ok = None if profile.max_commute_min is None else minutes <= profile.max_commute_min
+    if profile.max_commute_min is not None:
+        detail += f", limit {profile.max_commute_min} min"
+    return [*rest, Check(name="commute", ok=ok, detail=detail, value=minutes)]

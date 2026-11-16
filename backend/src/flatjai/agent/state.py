@@ -43,6 +43,7 @@ class Match(BaseModel):
     fetched_at: str
     dropped: list[str] = Field(default_factory=list)  # fields cleared by the grounding check
     duplicate_of: int | None = None
+    commute: dict[str, Any] | None = None  # Commute JSON (an estimate) to the student's campus
 
     @property
     def fits(self) -> bool:

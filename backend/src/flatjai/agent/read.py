@@ -18,8 +18,11 @@ from ..tools.fetch import FetchBlocked, FetchError, Page
 from ..tools.portals import portal_for
 from ..tools.preview import preview_from_page
 from ..tools.search import SearchResult
+from ..tools.transit import CAMPUSES, Commute, commute
+from ..tracing import span
 from .context import RunContext
-from .match import hard_checks, quick_reject
+from .match import hard_checks, quick_reject, with_commute
+from .plan import campus_key
 from .state import Match, RunState, Stage
 from .verify import Unsupported, verify_listing
 
@@ -106,15 +109,43 @@ async def read_one(ctx: RunContext, result: SearchResult, profile: Profile) -> t
 
     listing = Listing.model_validate(row.data)
     c = cost(listing)
+    checks = hard_checks(listing, c, profile)
+    trip = await _commute(ctx, listing, profile)
+    if trip is not None:
+        journey, precision = trip
+        checks = with_commute(checks, journey.minutes, journey.summary(), profile, precision)
     match = Match(
         listing_id=row.id,
         listing=row.data,
         cost=c.model_dump(mode="json"),
-        checks=hard_checks(listing, c, profile),
+        checks=checks,
         fetched_at=page.fetched_at.isoformat(),
         dropped=row.dropped,
+        commute=journey.model_dump() | {"precision": precision} if trip else None,
     )
     return match, "ok"
+
+
+async def _commute(ctx: RunContext, listing: Listing, profile: Profile) -> tuple[Commute, str] | None:
+    """Locate the home (cached) and estimate the commute to the student's campus."""
+    key = campus_key(profile.campus)
+    if ctx.tools.geocoder is None or key not in CAMPUSES:
+        return None
+    place = await ctx.tools.geocoder.locate(geocode_name(listing), listing.district)
+    if place is None:
+        return None
+    async with span("commute", "tool", campus=key, home=[place.lat, place.lon]) as sp:
+        journey = commute((place.lat, place.lon), key)
+        sp.attrs["minutes"] = journey.minutes if journey else None
+    return (journey, place.precision) if journey else None
+
+
+def geocode_name(listing: Listing) -> str | None:
+    """The estate or building to look up: 'Hang Hau · RESIDENCE OASIS・Tower 2' -> 'RESIDENCE OASIS'."""
+    if listing.estate:
+        return listing.estate
+    title = listing.title.split("·")[-1]
+    return title.split("・")[0].strip() or None
 
 
 async def _extract(
@@ -157,4 +188,5 @@ def card(m: Match) -> dict:
         "checks": [c.model_dump() for c in m.checks],
         "fetched_at": m.fetched_at,
         "unverified_fields": m.dropped,
+        "commute": m.commute,
     }

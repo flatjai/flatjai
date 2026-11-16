@@ -61,6 +61,7 @@ def facts(m: Match, profile: Profile) -> dict:
         "bedrooms": listing.bedrooms,
         "furnished": listing.furnished,
         "available_from": listing.available_from.isoformat() if listing.available_from else None,
+        "commute_min_estimate": m.commute["minutes"] if m.commute else None,
     }
 
 
