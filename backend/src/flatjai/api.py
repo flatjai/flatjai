@@ -35,6 +35,7 @@ from .storage.blobs import BlobStore
 from .storage.store import Store, make_engine
 from .tools.cache import CachedFetcher, CachedSearcher
 from .tools.fetch import Fetcher
+from .tools.geocode import Geocoder
 from .tools.search import Searcher
 
 HEARTBEAT_S = 15.0
@@ -55,10 +56,14 @@ def build_run_manager(http: httpx.AsyncClient, model: ModelClient, store: Store)
         blobs,
     )
     searcher = CachedSearcher(Searcher(http, s.searxng_url), store)
+    geocoder = Geocoder(http, store)
 
     def make_tools(budget: Budget) -> Toolbox:
         return Toolbox(
-            model=model.for_run(call_limit=budget.max_model_calls), searcher=searcher, fetcher=fetcher
+            model=model.for_run(call_limit=budget.max_model_calls),
+            searcher=searcher,
+            fetcher=fetcher,
+            geocoder=geocoder,
         )
 
     return RunManager(store, make_tools, Budget(max_seconds=s.run_max_seconds))
