@@ -49,7 +49,13 @@ export type Card = {
   unverified_fields: string[];
 };
 
-export type Counters = { queries: number; candidates: number; pages: number; cards: number };
+export type Counters = {
+  queries: number;
+  candidates: number;
+  pages: number;
+  cards: number;
+  prefiltered?: number; // skipped from their list-page card alone (listed rent over budget, or too far)
+};
 export type ShortlistItem = { listing_id: number; rank: number; reasons: string[] };
 export type Usage = {
   seconds: number;

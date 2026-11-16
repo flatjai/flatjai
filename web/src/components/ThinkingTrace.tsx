@@ -40,7 +40,9 @@ function doneTitle(stage: Stage, run: RunState): string {
     case "plan":
       return run.round > 1 ? `Planned round ${run.round}: ${run.queries.length} searches` : `Planned ${run.queries.length} searches`;
     case "search":
-      return `Searched ${c.queries} times · ${c.candidates} homes found`;
+      return c.prefiltered
+        ? `Searched ${c.queries} times · ${c.candidates} homes found · ${c.prefiltered} ruled out by listed price or area`
+        : `Searched ${c.queries} times · ${c.candidates} homes found`;
     case "read":
       return `Read ${c.pages} listings`;
     case "match":
@@ -175,6 +177,7 @@ const SHORT: Record<string, string> = {
   bedrooms: "too few rooms",
   move_in: "free too late",
   duplicate: "duplicate",
+  "over budget (listed rent)": "over budget",
   blocked: "site blocked",
   "gone or unreachable": "already let",
   "not a listing": "not a listing",
