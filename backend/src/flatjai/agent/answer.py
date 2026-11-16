@@ -20,6 +20,7 @@ from .context import RunContext
 from .match import rent_for_you
 from .state import Match, RunState, Stage
 
+_FIELD_NAME = re.compile(r"\b[a-z]+(?:_[a-z]+)+\b", re.I)
 _NUMBER = re.compile(r"(\d[\d,]*(?:\.\d+)?)\s*(%|min|minute|km|m\b|metre|meter|hour|hr|分鐘|公里)?", re.I)
 SMALL_COUNTS = set(range(0, 11))  # "2 bedrooms", "3 homes": fine without a matching fact
 
@@ -41,6 +42,8 @@ SYSTEM = """You present a shortlist of Hong Kong homes to a student, speaking to
 All homes given already meet their hard limits. Order them best first for this student, weighing
 their soft preferences and value for money, and give 1-3 short reasons for each.
 Only state facts that appear in the home's data. Write money as HK$ with commas, e.g. HK$9,600.
+The student's budget is a monthly RENT budget: compare it only with rent_for_you_hkd ("your rent" or
+"your share of the rent"), never with the all-in cost. Never write the data's field names.
 If a preference cannot be checked from the data (e.g. "quiet"), do not claim it.
 The summary is two short sentences to the student. Reply with JSON only."""
 
@@ -97,6 +100,20 @@ def budgeted(f: dict, profile: Profile) -> int:
     """The figure the budget is compared with: the rent for the student (their share, or the whole
     rent for a total budget). The budget is a rent budget; all-in cost is shown, not compared."""
     return f["rent_for_you_hkd"]
+
+
+def fair_budget_claim(text: str, f: dict, profile: Profile) -> bool:
+    """A reason that talks about the budget may only use the rent it is compared with, the budget
+    and their difference. Every number can be real and the claim still false: "all-in HK$19,600 is
+    under your HK$15,000 budget" (seen live)."""
+    if _FIELD_NAME.search(text):
+        return False  # the model echoed a field name ("Rent_for_you_hkd is HK$9,000")
+    if not profile.budget_hkd_month or "budget" not in text.lower():
+        return True
+    budget, rent = profile.budget_hkd_month, f["rent_for_you_hkd"]
+    allowed = {budget, rent, budget - rent} | SMALL_COUNTS
+    money = {int(float(raw.replace(",", ""))) for raw, _unit in _NUMBER.findall(text)}
+    return money <= allowed and rent <= budget
 
 
 def code_reasons(f: dict, profile: Profile) -> list[str]:
@@ -162,7 +179,12 @@ async def _ranked(
             if p.id not in table or any(p.id == i for i, _ in picks):
                 dropped += 1
                 continue
-            ok = [r for r in p.reasons if supported(r, allowed_numbers(table[p.id], profile))]
+            ok = [
+                r
+                for r in p.reasons
+                if supported(r, allowed_numbers(table[p.id], profile))
+                and fair_budget_claim(r, table[p.id], profile)
+            ]
             dropped += len(p.reasons) - len(ok)
             picks.append((p.id, ok or code_reasons(table[p.id], profile)))
         # homes the model left out still appear, after its picks, ordered by value

@@ -158,3 +158,15 @@ def test_total_budget_compares_the_whole_rent_never_a_share():
     f = facts(m, p)
     assert f["rent_for_you_hkd"] == 19000 and f["monthly_all_in_hkd"] == 19600  # the whole rent, no share
     assert not supported("Monthly share is HK$9,800, under your budget of HK$30,000", allowed_numbers(f, p))
+
+
+def test_budget_claims_must_compare_the_rent():
+    from flatjai.agent.answer import fair_budget_claim
+
+    p = Profile(budget_hkd_month=15000, flatmates=1)
+    f = FACTS | {"rent_hkd": 19000, "rent_for_you_hkd": 9500, "monthly_all_in_hkd": 19600}
+    assert not fair_budget_claim("Monthly all-in cost is HK$19,600, under your budget of HK$15,000", f, p)
+    assert fair_budget_claim("HK$9,500 rent a month for you, HK$5,500 under your budget", f, p)
+    assert fair_budget_claim("About HK$19,600 a month all in", f, p)  # no budget claim: other checks apply
+
+    assert not fair_budget_claim("Rent_for_you_hkd is HK$9,500, within your HK$15,000 budget", f, p)
