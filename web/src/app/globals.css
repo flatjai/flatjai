@@ -1,0 +1,371 @@
+@import "tailwindcss";
+
+/* FlatJai is a dark product: depth comes from lighter surfaces on near-black, not shadows.
+   Coral is the brand and Jai's colour; each agent stage has its own hue so the trace reads at a glance. */
+:root {
+  --bg: #09090b;
+  --surface: #121215;
+  --raised: #1a1a1e;
+  --raised-2: #232328;
+  --line: rgb(255 255 255 / 0.08);
+  --line-faint: rgb(255 255 255 / 0.05);
+  --fg: #ececee;
+  --muted: #a1a1a7;
+  --faint: #6c6c72;
+
+  --coral: #ff6b4a;
+  --coral-strong: #ff8f73;
+  --coral-deep: #e8502f;
+  --coral-soft: rgb(255 107 74 / 0.14);
+  --amber: #ffb347;
+
+  /* the brand: a sunset from amber into coral */
+  --sunset: linear-gradient(135deg, #ffc24d 0%, #ff8a45 45%, #ff5a4a 100%);
+  --sunset-soft: linear-gradient(135deg, rgb(255 194 77 / 0.16), rgb(255 90 74 / 0.16));
+
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --bad: #f87171;
+  --sky: #60a5fa;
+  --teal: #2dd4bf;
+  --rose: #fb7185;
+
+  --header-h: 56px;
+  --composer-h: 96px;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-raised-2: var(--raised-2);
+  --color-line: var(--line);
+  --color-line-faint: var(--line-faint);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-coral: var(--coral);
+  --color-coral-strong: var(--coral-strong);
+  --color-coral-deep: var(--coral-deep);
+  --color-coral-soft: var(--coral-soft);
+  --color-amber: var(--amber);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+  --color-sky: var(--sky);
+  --color-teal: var(--teal);
+  --color-rose: var(--rose);
+  /* kept for the run inspector */
+  --color-accent: var(--coral);
+  --color-accent-strong: var(--coral-strong);
+  --font-sans: var(--font-geist-sans), "PingFang HK", "Noto Sans HK", system-ui, sans-serif;
+}
+
+html {
+  color-scheme: dark;
+  background: var(--bg);
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: var(--coral-soft);
+  color: var(--fg);
+}
+
+@media (pointer: coarse) {
+  textarea,
+  input {
+    font-size: 16px !important; /* iOS zooms into anything smaller */
+  }
+}
+
+/* App frame: fixed bars, each with a strip of its own colour past its outer edge so content never
+   shows through when iOS toolbars collapse */
+.fj-header {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 30;
+  height: var(--header-h);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 -80px 0 0 var(--bg);
+}
+
+.fj-composer-bar {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 30;
+  padding: 12px 16px calc(14px + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, var(--bg) 70%, transparent);
+  box-shadow: 0 80px 0 0 var(--bg);
+}
+
+/* Words that are being worked on: a slow light passes through them */
+.fj-shimmer-text {
+  background: linear-gradient(90deg, var(--muted) 0%, var(--muted) 40%, var(--fg) 50%, var(--muted) 60%, var(--muted) 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: fj-text-shimmer 2.2s linear infinite;
+}
+
+@keyframes fj-text-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -150% 0; }
+}
+
+/* Skeletons sit at the content's own geometry; a faint slow light crosses them */
+.fj-skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--raised-2);
+}
+
+.fj-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.06), transparent);
+  translate: -100% 0;
+  animation: fj-sweep 1.6s ease-in-out infinite;
+}
+
+@keyframes fj-sweep {
+  to { translate: 100% 0; }
+}
+
+/* Arrivals: things rise a little as they appear, never pop */
+.fj-rise {
+  animation: fj-rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes fj-rise {
+  from { opacity: 0; translate: 0 8px; }
+  to { opacity: 1; translate: 0 0; }
+}
+
+.fj-pulse-dot {
+  animation: fj-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes fj-pulse {
+  0%, 100% { opacity: 1; scale: 1; }
+  50% { opacity: 0.45; scale: 0.8; }
+}
+
+/* A soft coral glow at the top of the page: the one lit colour on black */
+.fj-glow {
+  position: fixed;
+  inset: -20vh -10vw auto;
+  height: 60vh;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(38% 55% at 38% 0%, rgb(255 179 71 / 0.12), transparent 70%),
+    radial-gradient(42% 60% at 64% 0%, rgb(255 90 74 / 0.13), transparent 70%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Brand surfaces ---------------------------------------------------------------------------- */
+.fj-sunset {
+  background: var(--sunset);
+  color: #1d0a04;
+}
+
+/* disabled stays quiet: this rule is unlayered, so Tailwind's disabled: utilities can't override it */
+.fj-sunset:disabled {
+  background: var(--raised-2);
+  color: var(--faint);
+}
+
+.fj-sunset:hover:not(:disabled) {
+  filter: brightness(1.08) saturate(1.05);
+}
+
+.fj-sunset-soft {
+  background: var(--sunset-soft);
+}
+
+.fj-sunset-text {
+  background: var(--sunset);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* a short warm glow when something good arrives */
+.fj-arrive-glow {
+  animation: fj-rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both, fj-glow-once 1.6s ease-out 0.1s both;
+}
+
+@keyframes fj-glow-once {
+  0% { box-shadow: 0 0 0 0 rgb(255 138 69 / 0); }
+  25% { box-shadow: 0 0 0 1px rgb(255 138 69 / 0.55), 0 0 36px -6px rgb(255 138 69 / 0.45); }
+  100% { box-shadow: 0 0 0 1px rgb(255 255 255 / 0.05), 0 0 0 0 rgb(255 138 69 / 0); }
+}
+
+/* Jai --------------------------------------------------------------------------------------- */
+.jai { overflow: visible; flex: none; -webkit-user-select: none; user-select: none; }
+.jai[data-follow] { cursor: pointer; }
+.jai-figure { transform-box: fill-box; transform-origin: 50% 100%; transition: rotate 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+.jai-eyes { transform-box: fill-box; transform-origin: 50% 50%; animation: jai-blink 4.6s infinite; transition: scale 0.25s ease; }
+.jai-pupils { transition: translate 0.3s ease; }
+
+/* moods */
+.jai[data-mood="idle"] .jai-figure { animation: jai-float 3.2s ease-in-out infinite; }
+.jai[data-mood="thinking"] .jai-figure { animation: jai-float 1.8s ease-in-out infinite; }
+.jai[data-mood="thinking"] .jai-pupils { animation: jai-look 2.4s ease-in-out infinite; }
+.jai[data-mood="reading"] .jai-figure { animation: jai-float 2.2s ease-in-out infinite; }
+.jai[data-mood="reading"] .jai-pupils { animation: jai-scan 1.3s ease-in-out infinite; }
+.jai[data-mood="happy"] .jai-figure { animation: jai-hop 0.9s cubic-bezier(0.3, 1.6, 0.5, 1) 2, jai-float 3.2s ease-in-out 1.8s infinite; }
+.jai[data-mood="excited"] .jai-figure { animation: jai-hop 0.7s cubic-bezier(0.3, 1.6, 0.5, 1) 1, jai-float 1.6s ease-in-out 0.7s infinite; }
+.jai[data-mood="curious"] .jai-figure { rotate: -9deg; transition: rotate 0.4s cubic-bezier(0.3, 1.5, 0.5, 1); }
+.jai[data-mood="curious"] .jai-pupils { translate: 1.5px -1.5px; }
+.jai[data-mood="sad"] .jai-figure { translate: 0 2px; }
+.jai[data-mood="sad"] .jai-pupils { translate: 0 2px; }
+.jai[data-mood="sad"] .jai-cheek { opacity: 0.25; }
+
+/* interactive: eyes and head follow the pointer (set as CSS variables from JS) */
+.jai[data-follow][data-mood="idle"] .jai-pupils,
+.jai[data-follow][data-mood="excited"] .jai-pupils { translate: var(--px, 0) var(--py, 0); transition: translate 0.12s ease-out; }
+.jai[data-follow][data-mood="idle"] .jai-figure { rotate: var(--tilt, 0deg); }
+.jai[data-follow]:hover .jai-eyes { scale: 1.1 1.12; }
+.jai[data-nod] .jai-figure { animation: jai-nod 0.26s ease-out; }
+.jai[data-flash="boop"] .jai-figure { animation: jai-boop 0.6s cubic-bezier(0.3, 1.6, 0.5, 1); }
+.jai[data-sleepy] .jai-eyes { scale: 1 0.22; animation: none; }
+.jai[data-sleepy] .jai-figure { animation: jai-breathe 3.6s ease-in-out infinite; rotate: -4deg; }
+
+@keyframes jai-float { 0%, 100% { translate: 0 0; } 50% { translate: 0 -2.5px; } }
+@keyframes jai-breathe { 0%, 100% { scale: 1 1; } 50% { scale: 1.02 0.98; } }
+@keyframes jai-blink { 0%, 92%, 100% { scale: 1 1; } 95% { scale: 1 0.1; } }
+@keyframes jai-look {
+  0%, 100% { translate: 0 0; }
+  25% { translate: 2px -2px; }
+  55% { translate: -2px -1.5px; }
+  80% { translate: 1px 1px; }
+}
+@keyframes jai-scan { 0% { translate: -2.2px 0.5px; } 50% { translate: 2.2px 0.5px; } 100% { translate: -2.2px 0.5px; } }
+@keyframes jai-hop {
+  0% { translate: 0 0; scale: 1 1; }
+  30% { translate: 0 -7px; scale: 0.96 1.05; }
+  60% { translate: 0 0; scale: 1.06 0.94; }
+  100% { translate: 0 0; scale: 1 1; }
+}
+@keyframes jai-nod { 0% { translate: 0 0; } 45% { translate: 0 1.6px; } 100% { translate: 0 0; } }
+@keyframes jai-boop {
+  0% { scale: 1 1; }
+  25% { scale: 1.12 0.86; }
+  55% { scale: 0.94 1.08; }
+  100% { scale: 1 1; }
+}
+
+/* Homepage ------------------------------------------------------------------------------------ */
+
+/* a quiet dot grid that fades out from behind Jai, and a sunset horizon under it */
+.fj-field {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: radial-gradient(rgb(255 255 255 / 0.075) 1px, transparent 1.2px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(60% 55% at 50% 28%, #000 0%, transparent 75%);
+}
+
+.fj-horizon {
+  position: absolute;
+  left: 50%;
+  top: 70px;
+  z-index: -1;
+  width: min(760px, 120vw);
+  height: 300px;
+  translate: -50% 0;
+  pointer-events: none;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(255 154 77 / 0.2), rgb(255 90 74 / 0.08) 55%, transparent);
+  filter: blur(20px);
+}
+
+/* the composer on the homepage: a sunset ring when focused */
+.fj-hero-composer {
+  border-radius: 20px;
+  padding: 1px;
+  background: linear-gradient(var(--line), var(--line));
+  transition: background 0.3s ease;
+}
+
+.fj-hero-composer:focus-within {
+  background: var(--sunset);
+}
+
+/* chips scroll sideways on a phone, without dragging the page */
+.fj-chip-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  mask-image: linear-gradient(90deg, #000 85%, transparent);
+}
+
+.fj-chip-row::-webkit-scrollbar { display: none; }
+
+@media (min-width: 640px) {
+  .fj-chip-row {
+    flex-wrap: wrap;
+    justify-content: center;
+    overflow: visible;
+    mask-image: none;
+  }
+}
+
+/* Focus mode: while the student types, the rest of the homepage steps back and the glow warms */
+.fj-home-recede {
+  transition: opacity 0.4s ease, filter 0.4s ease;
+}
+
+.fj-home[data-engaged] .fj-home-recede {
+  opacity: 0.35;
+  filter: saturate(0.4);
+}
+
+.fj-home[data-engaged] .fj-home-recede:hover,
+.fj-home[data-engaged] .fj-home-recede:focus-within {
+  opacity: 1;
+  filter: none;
+}
+
+.fj-horizon {
+  transition: opacity 0.6s ease, scale 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.fj-home[data-engaged] .fj-horizon {
+  scale: 1.15;
+  filter: blur(26px) brightness(1.35);
+}
+
+/* dashed outline for a hard limit not given yet */
+.ring-dashed {
+  --tw-ring-color: transparent;
+  box-shadow: none;
+  outline: 1px dashed var(--line);
+  outline-offset: -1px;
+}
