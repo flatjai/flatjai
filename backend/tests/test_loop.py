@@ -108,7 +108,7 @@ async def test_full_loop_streams_cards_and_ranked_answer(store):
     assert cards[0]["checks"][0]["name"] == "budget" and cards[0]["checks"][0]["ok"] is True
     done = events[-1]
     assert done.type == "done" and len(done.data["shortlist"]) == 1  # both pages hold the same flat
-    assert done.data["shortlist"][0]["reasons"][0].startswith("HK$13,400 a month for you")
+    assert done.data["shortlist"][0]["reasons"][0].startswith("HK$12,800 rent a month, HK$2,200 under budget")
     assert state.stage == "finished"
     saved = await store.get_run(run_id)
     assert saved.stage == "finished" and saved.state["round"] == 1
@@ -191,7 +191,7 @@ async def test_replan_when_nothing_fits(store):
     assert "Hang Hau flat" in plan_prompt["messages"][1]["content"]  # told what was tried
     done = events[-1].data
     assert done["shortlist"] == [] and "None of the" in done["summary"]
-    assert done["relaxations"][0].startswith("Raising the budget to about HK$13,400")
+    assert done["relaxations"][0].startswith("Raising the rent budget to about HK$12,800")
 
 
 async def test_enough_homes_skips_the_reflect_call(store):

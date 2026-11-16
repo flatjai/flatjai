@@ -21,19 +21,20 @@ def checks(profile: Profile, **kw):
     return {c.name: c for c in hard_checks(li, cost(li), profile)}
 
 
-def test_budget_uses_all_in_monthly_cost():
-    c = checks(Profile(budget_hkd_month=12500))["budget"]
-    assert c.ok is False and c.value == 12600  # rent 12,000 + utilities 600
+def test_budget_is_a_rent_budget():
+    c = checks(Profile(budget_hkd_month=12000))["budget"]
+    assert c.ok is True and c.value == 12000  # rent 12,000; utilities are not counted against it
+    assert checks(Profile(budget_hkd_month=11999))["budget"].ok is False
 
 
-def test_whole_flat_is_split_between_flatmates():
+def test_whole_flat_rent_is_split_between_flatmates():
     c = checks(Profile(budget_hkd_month=7000, flatmates=1))["budget"]
-    assert c.ok is True and c.value == 6300 and "split 2 ways" in c.detail
+    assert c.ok is True and c.value == 6000 and "split 2 ways" in c.detail
 
 
-def test_total_budget_is_compared_with_the_whole_flat():
-    c = checks(Profile(budget_hkd_month=12000, flatmates=1, budget_is_total=True))["budget"]
-    assert c.ok is False and c.value == 12600
+def test_total_budget_is_compared_with_the_whole_rent():
+    c = checks(Profile(budget_hkd_month=11000, flatmates=1, budget_is_total=True))["budget"]
+    assert c.ok is False and c.value == 12000
 
 
 def test_room_wanted_rejects_whole_flat():
@@ -80,15 +81,15 @@ def test_relaxation_numbers_are_computed():
         match(3, p, rent_hkd_month=15000, title="C"),
     ]
     assert relaxations(ms, p) == [
-        "Raising the budget to HK$11,600 a month adds 1 home(s).",
-        "Raising the budget to HK$12,600 a month adds 2 home(s).",
-    ]  # HK$15,600 is more than 1.5x the budget: not suggested
+        "Raising the rent budget to HK$11,000 a month adds 1 home(s).",
+        "Raising the rent budget to HK$15,000 a month adds 3 home(s).",
+    ]  # 15,000 is exactly 1.5x the budget: the furthest suggestion still offered
 
 
 def test_no_rooms_found_suggests_sharing_a_flat():
     p = Profile(room_only=True)
     out = relaxations([match(1, p)], p)
-    assert "No rooms" in out[0] and "HK$12,600" in out[0]
+    assert "No rooms" in out[0] and "HK$12,600" in out[0]  # the cheapest flat's all-in cost
 
 
 FACTS = {
@@ -97,20 +98,22 @@ FACTS = {
     "district": "Hang Hau",
     "rent_hkd": 12000,
     "monthly_all_in_hkd": 12600,
-    "your_monthly_share_hkd": 6300,
+    "rent_for_you_hkd": 6000,
     "move_in_cost_hkd": 42000,
     "saleable_sqft": 400,
     "gross_sqft": None,
     "bedrooms": 2,
     "furnished": None,
     "available_from": None,
+    "commute_min_estimate": 22,
 }
 PROFILE = Profile(budget_hkd_month=7000, flatmates=1)
 
 
 def test_claims_with_real_numbers_are_supported():
     allowed = allowed_numbers(FACTS, PROFILE)
-    assert supported("HK$6,300 a month for you, HK$700 under budget", allowed)
+    assert supported("HK$6,000 rent a month for you, HK$1,000 under budget", allowed)
+    assert supported("HK$12,600 a month all in, about 22 minutes to campus", allowed)
     assert supported("400 ft² saleable, 2 bedrooms", allowed)
     assert supported("Quiet estate with a gym", allowed)
 
@@ -119,6 +122,7 @@ def test_invented_numbers_are_caught():
     allowed = allowed_numbers(FACTS, PROFILE)
     assert not supported("Only 5 minutes from the MTR at HK$5,900", allowed)
     assert not supported("Rent is HK$11,000", allowed)
+    assert not supported("HK$6,300 a month for you", allowed)  # an all-in share is not a fact
     assert not supported("12.5% cheaper than average", allowed)
     assert not supported("Only 5 minutes from the MTR", allowed)
     assert not supported("3 km to campus", allowed)
@@ -130,9 +134,12 @@ def test_code_reasons_are_always_supported():
 
 def test_total_budget_reasons_are_supported():
     p = Profile(budget_hkd_month=13000, flatmates=1, budget_is_total=True)
-    reasons = code_reasons(FACTS, p)
-    assert reasons[0] == "HK$12,600 a month all in, HK$400 under your total budget"
-    assert all(supported(r, allowed_numbers(FACTS, p)) for r in reasons)
+    f = FACTS | {"rent_for_you_hkd": 12000}
+    reasons = code_reasons(f, p)
+    assert reasons[0] == "HK$12,000 rent a month in total, HK$1,000 under budget"
+    assert reasons[1] == "about 22 minutes to campus"
+    FACTS_TOTAL = f
+    assert all(supported(r, allowed_numbers(FACTS_TOTAL, p)) for r in reasons)
 
 
 def test_area_check_until_real_commutes():
@@ -143,11 +150,11 @@ def test_area_check_until_real_commutes():
     assert "area" not in checks(Profile(campus="HKUST"), district="Tuen Mun")  # no commute limit given
 
 
-def test_total_budget_hides_the_per_person_share_from_the_model():
+def test_total_budget_compares_the_whole_rent_never_a_share():
     from flatjai.agent.answer import facts
 
     p = Profile(budget_hkd_month=30000, flatmates=1, budget_is_total=True)
     m = match(1, p, rent_hkd_month=19000)
     f = facts(m, p)
-    assert f["your_monthly_share_hkd"] is None and f["monthly_all_in_hkd"] == 19600
+    assert f["rent_for_you_hkd"] == 19000 and f["monthly_all_in_hkd"] == 19600  # the whole rent, no share
     assert not supported("Monthly share is HK$9,800, under your budget of HK$30,000", allowed_numbers(f, p))

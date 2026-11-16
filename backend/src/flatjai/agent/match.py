@@ -9,7 +9,7 @@ import re
 from datetime import timedelta
 
 from ..schemas import Listing, Profile
-from ..tools.cost import UTILITIES_HKD_MONTH, Cost
+from ..tools.cost import Cost
 from ..tools.preview import ListingPreview
 from .plan import candidate_areas
 from .state import Check, Match
@@ -21,28 +21,28 @@ def people(profile: Profile) -> int:
     return (profile.flatmates or 0) + 1
 
 
-def your_share(cost: Cost, listing: Listing, profile: Profile) -> int:
-    """Monthly cost for the student: a whole flat is split between the people sharing it."""
-    if listing.room_only:
-        return cost.monthly_hkd
-    return round(cost.monthly_hkd / people(profile))
+def rent_for_you(listing: Listing, profile: Profile) -> int:
+    """The rent the student's budget is compared with. A student's amount is a monthly RENT budget:
+    a whole flat's rent is split between the people sharing it, unless the budget is a total.
+    Utilities and fees are shown as the all-in cost, never counted against the budget."""
+    if listing.room_only or profile.budget_is_total:
+        return listing.rent_hkd_month
+    return round(listing.rent_hkd_month / people(profile))
 
 
 def hard_checks(listing: Listing, cost: Cost, profile: Profile) -> list[Check]:
     checks: list[Check] = []
-    if profile.budget_hkd_month is not None and profile.budget_is_total:
-        # household budget: compare the whole flat's cost
-        ok = cost.monthly_hkd <= profile.budget_hkd_month
-        detail = f"HK${cost.monthly_hkd:,}/month all in, total budget HK${profile.budget_hkd_month:,}"
-        checks.append(Check(name="budget", ok=ok, detail=detail, value=cost.monthly_hkd))
-    elif profile.budget_hkd_month is not None:
-        share = your_share(cost, listing, profile)
+    if profile.budget_hkd_month is not None:
+        rent = rent_for_you(listing, profile)
         split = (
-            f" (HK${cost.monthly_hkd:,} split {people(profile)} ways)" if share != cost.monthly_hkd else ""
+            f" (HK${listing.rent_hkd_month:,} split {people(profile)} ways)"
+            if rent != listing.rent_hkd_month
+            else ""
         )
-        ok = share <= profile.budget_hkd_month
-        detail = f"HK${share:,}/month all in{split}, budget HK${profile.budget_hkd_month:,}"
-        checks.append(Check(name="budget", ok=ok, detail=detail, value=share))
+        kind = "total rent budget" if profile.budget_is_total else "rent budget"
+        ok = rent <= profile.budget_hkd_month
+        detail = f"rent HK${rent:,}/month{split}, {kind} HK${profile.budget_hkd_month:,}"
+        checks.append(Check(name="budget", ok=ok, detail=detail, value=rent))
     if profile.room_only is True:
         checks.append(
             Check(
@@ -143,7 +143,7 @@ def relaxations(matches: list[Match], profile: Profile, card_rents: list[int] | 
         needed = [n for n in needed if n <= 1.5 * profile.budget_hkd_month]  # useful suggestions only
         for target in sorted({needed[0], needed[min(2, len(needed) - 1)]} if needed else set()):
             adds = sum(n <= target for n in needed)
-            out.append(f"Raising the budget to HK${_round_up(target):,} a month adds {adds} home(s).")
+            out.append(f"Raising the rent budget to HK${_round_up(target):,} a month adds {adds} home(s).")
     if not out and card_rents and profile.budget_hkd_month:
         out += _card_relaxations(card_rents, profile)
     if profile.room_only:
@@ -158,17 +158,17 @@ def relaxations(matches: list[Match], profile: Profile, card_rents: list[int] | 
 
 
 def _card_relaxations(card_rents: list[int], profile: Profile) -> list[str]:
-    """From list-page rents (unverified, so "about"): the monthly figure the budget is compared with,
-    rent plus estimated utilities, split between flatmates unless the budget is a total."""
+    """From list-page rents (unverified, so "about"): the rent the budget is compared with, split
+    between flatmates unless the budget is a total."""
     split = 1 if profile.budget_is_total else people(profile)
-    needed = sorted(round((rent + UTILITIES_HKD_MONTH) / split) for rent in card_rents)
+    needed = sorted(round(rent / split) for rent in card_rents)
     budget = profile.budget_hkd_month or 0
     reachable = [n for n in needed if n <= 1.5 * budget]
     if not reachable:
-        return [f"The homes found are listed from about HK${_round_up(needed[0]):,} a month for you."]
+        return [f"The homes found are listed from about HK${_round_up(needed[0]):,} rent a month for you."]
     target = reachable[min(2, len(reachable) - 1)]
     adds = sum(n <= target for n in needed)
-    return [f"Raising the budget to about HK${_round_up(target):,} a month adds about {adds} home(s)."]
+    return [f"Raising the rent budget to about HK${_round_up(target):,} a month adds about {adds} home(s)."]
 
 
 def _round_up(n: int, step: int = 100) -> int:

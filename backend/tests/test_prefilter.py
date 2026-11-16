@@ -104,9 +104,11 @@ def test_suggestions_come_from_card_rents_when_everything_was_skipped():
 
     p = Profile(budget_hkd_month=9000)
     assert relaxations([], p, [12000, 12500, 13000, 30000]) == [
-        "Raising the budget to about HK$13,100 a month adds about 2 home(s)."  # HK$13,600 is past 1.5x
+        "Raising the rent budget to about HK$13,000 a month adds about 3 home(s)."  # 30,000 is past 1.5x
     ]
-    assert relaxations([], p, [40000]) == ["The homes found are listed from about HK$40,600 a month for you."]
+    assert relaxations([], p, [40000]) == [
+        "The homes found are listed from about HK$40,000 rent a month for you."
+    ]
 
 
 async def test_answer_explains_when_every_home_was_skipped_early(store):

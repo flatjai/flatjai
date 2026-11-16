@@ -15,10 +15,9 @@ from pydantic import BaseModel, Field
 
 from ..model_client import BudgetExhausted
 from ..schemas import Listing, Profile
-from ..tools.cost import Cost
 from ..tracing import span
 from .context import RunContext
-from .match import your_share
+from .match import rent_for_you
 from .state import Match, RunState, Stage
 
 _NUMBER = re.compile(r"(\d[\d,]*(?:\.\d+)?)\s*(%|min|minute|km|m\b|metre|meter|hour|hr|分鐘|公里)?", re.I)
@@ -54,9 +53,9 @@ def facts(m: Match, profile: Profile) -> dict:
         "district": listing.district,
         "rent_hkd": listing.rent_hkd_month,
         "monthly_all_in_hkd": m.cost["monthly_hkd"],
-        # with a total (household) budget the whole flat's cost is what counts: no per-person share, so
-        # the model cannot set a share against the total ("HK$9,800 under your budget of HK$30,000")
-        "your_monthly_share_hkd": None if profile.budget_is_total else your_share(_cost(m), listing, profile),
+        # the rent the student's budget is compared with: their share of a shared flat's rent, or the
+        # whole rent for a total budget (so a share is never set against a total budget)
+        "rent_for_you_hkd": rent_for_you(listing, profile),
         "move_in_cost_hkd": m.cost["move_in_hkd"],
         "saleable_sqft": listing.saleable_sqft,
         "gross_sqft": listing.gross_sqft,
@@ -65,10 +64,6 @@ def facts(m: Match, profile: Profile) -> dict:
         "available_from": listing.available_from.isoformat() if listing.available_from else None,
         "commute_min_estimate": m.commute["minutes"] if m.commute else None,
     }
-
-
-def _cost(m: Match) -> Cost:
-    return Cost.model_validate(m.cost)
 
 
 def allowed_numbers(f: dict, profile: Profile, extra: set[int] = frozenset()) -> set[int]:
@@ -99,22 +94,21 @@ def supported(text: str, allowed: set[int]) -> bool:
 
 
 def budgeted(f: dict, profile: Profile) -> int:
-    """The figure the budget is compared with: the whole flat for a total budget, else the student's share."""
-    return f["monthly_all_in_hkd"] if profile.budget_is_total else f["your_monthly_share_hkd"]
+    """The figure the budget is compared with: the rent for the student (their share, or the whole
+    rent for a total budget). The budget is a rent budget; all-in cost is shown, not compared."""
+    return f["rent_for_you_hkd"]
 
 
 def code_reasons(f: dict, profile: Profile) -> list[str]:
     reasons = []
-    share = f["your_monthly_share_hkd"]
-    if profile.budget_hkd_month and profile.budget_is_total:
-        total = f["monthly_all_in_hkd"]
-        reasons.append(
-            f"HK${total:,} a month all in, HK${profile.budget_hkd_month - total:,} under your total budget"
-        )
-    elif profile.budget_hkd_month:
-        reasons.append(f"HK${share:,} a month for you, HK${profile.budget_hkd_month - share:,} under budget")
+    rent = f["rent_for_you_hkd"]
+    who = " in total" if profile.budget_is_total else " for you" if rent != f["rent_hkd"] else ""
+    if profile.budget_hkd_month:
+        reasons.append(f"HK${rent:,} rent a month{who}, HK${profile.budget_hkd_month - rent:,} under budget")
     else:
-        reasons.append(f"HK${share:,} a month for you, all in")
+        reasons.append(f"HK${rent:,} rent a month{who}")
+    if f["commute_min_estimate"]:
+        reasons.append(f"about {f['commute_min_estimate']} minutes to campus")
     if f["saleable_sqft"]:
         reasons.append(f"{f['saleable_sqft']:,} ft² saleable")
     if f["district"]:
@@ -149,7 +143,7 @@ async def _ranked(
     cheapest = table[by_value[0]]
     fallback_summary = (
         f"{len(table)} home(s) meet your limits. The best value is {cheapest['title']} at "
-        f"HK${budgeted(cheapest, profile):,} a month {'all in' if profile.budget_is_total else 'for you'}."
+        f"HK${budgeted(cheapest, profile):,} rent a month {'in total' if profile.budget_is_total else 'for you'}."
     )
     async with span("explain+check", "stage", homes=len(table)) as sp:
         try:
