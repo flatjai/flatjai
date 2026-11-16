@@ -43,3 +43,11 @@ def test_close_to_campus_goes_direct():
 
 def test_unknown_campus_has_no_estimate():
     assert commute((22.30, 114.10), "NOWHERE", NET, CAMPUS) is None
+
+
+def test_route_has_home_stations_and_campus_for_the_map():
+    c = commute((22.3005, 114.1005), "UNI", NET, CAMPUS)
+    assert [p.kind for p in c.route] == ["home", "station", "station", "campus"]
+    assert [p.name for p in c.route[1:3]] == ["Alpha", "Charlie"]
+    direct = commute((22.30, 114.195), "UNI", NET, CAMPUS)
+    assert [p.kind for p in direct.route] == ["home", "campus"]

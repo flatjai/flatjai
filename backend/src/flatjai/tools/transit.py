@@ -80,10 +80,18 @@ class Leg(BaseModel):
     minutes: float
 
 
+class Place(BaseModel):
+    name: str
+    kind: str  # home | station | campus
+    lat: float
+    lon: float
+
+
 class Commute(BaseModel):
     minutes: int
     legs: list[Leg]
     method: str = "estimate"
+    route: list[Place] = []  # home, stations used, campus: what a map draws
 
     def summary(self) -> str:
         return " · ".join(f"{leg.text} {round(leg.minutes)} min" for leg in self.legs)
@@ -172,6 +180,13 @@ def commute(
         net.stations, key=lambda c: distance_m(home, (net.stations[c]["lat"], net.stations[c]["lon"]))
     )[:3]
     options: list[Commute] = []
+    here = Place(name="Home", kind="home", lat=home[0], lon=home[1])
+    there = Place(name=campus.name, kind="campus", lat=campus.lat, lon=campus.lon)
+
+    def station(c: str) -> Place:
+        st = net.stations[c]
+        return Place(name=st["name"], kind="station", lat=st["lat"], lon=st["lon"])
+
     for code in nearest:
         to_station = access(net, home, code)
         rides = ride_minutes(net, code, set(campus.egress))
@@ -187,7 +202,12 @@ def commute(
                     )
                 )
             legs.append(Leg(mode="bus" if "bus" in how else "walk", text=how, minutes=egress_min))
-            options.append(Commute(minutes=round(sum(leg.minutes for leg in legs)), legs=legs))
+            stops = [station(code)] if target == code else [station(code), station(target)]
+            options.append(
+                Commute(
+                    minutes=round(sum(leg.minutes for leg in legs)), legs=legs, route=[here, *stops, there]
+                )
+            )
     direct_m = distance_m(home, (campus.lat, campus.lon)) * STREET_FACTOR
     if direct_m <= DIRECT_MAX_M:
         if direct_m <= MAX_WALK_M:
@@ -198,5 +218,5 @@ def commute(
                 text=f"bus or minibus to {campus.name}",
                 minutes=DIRECT_WAIT_MIN + direct_m / BUS_M_PER_MIN,
             )
-        options.append(Commute(minutes=round(leg.minutes), legs=[leg]))
+        options.append(Commute(minutes=round(leg.minutes), legs=[leg], route=[here, there]))
     return min(options, key=lambda c: c.minutes) if options else None
