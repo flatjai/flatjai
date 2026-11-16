@@ -10,10 +10,20 @@ dependencies = [
   "pydantic-settings>=2.4",
   "openai>=1.50",
   "pyyaml>=6.0",
+  "httpx>=0.28.1",
+  "selectolax>=1.0.2",
+  "sqlalchemy[asyncio]>=2.0",
+  "psycopg[binary]>=3.2",
+  "alembic>=1.20.1",
 ]
 
 [dependency-groups]
-dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.6"]
+dev = [
+    "aiosqlite>=0.22.1",
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -26,3 +36,11 @@ packages = ["src/flatjai"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC"]
+ignore = ["E501"]  # the formatter wraps code; long prompt strings stay readable

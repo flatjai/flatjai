@@ -11,5 +11,17 @@ services:
       test: ["CMD-SHELL", "pg_isready -U flatjai"]
       interval: 2s
       retries: 20
+
+  searxng:   # free meta search, no API key; JSON at http://localhost:8888/search?q=...&format=json
+    image: searxng/searxng:2026.11.15-2d500cb6b
+    ports: ["8888:8080"]
+    volumes: ["./deploy/searxng/settings.yml:/etc/searxng/settings.yml:ro"]
+    environment:
+      SEARXNG_BASE_URL: http://localhost:8888/
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"]
+      interval: 3s
+      retries: 20
+
 volumes:
   pgdata:

@@ -1,4 +1,5 @@
 """M0 acceptance check: the active model profile answers a typed call with a valid Profile."""
+
 import asyncio
 import sys
 
@@ -20,6 +21,7 @@ async def main() -> int:
         return 1
     s = client.calls[-1]
     print(result.model_dump_json(indent=2))
+    print(f"missing hard constraints: {result.missing() or 'none'}")
     print(f"OK in {s.ms:.0f} ms, {s.tokens_in} in / {s.tokens_out} out tokens, {s.attempts} attempt(s)")
     return 0
 

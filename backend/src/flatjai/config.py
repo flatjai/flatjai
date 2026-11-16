@@ -1,4 +1,5 @@
 """Settings and model profiles (models.yaml)."""
+
 from functools import lru_cache
 from pathlib import Path
 
@@ -16,6 +17,19 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://flatjai:flatjai@localhost:5432/flatjai"
     models_file: Path = BACKEND_DIR / "models.yaml"
 
+    # Tools
+    searxng_url: str = "http://localhost:8888"
+    data_dir: Path = BACKEND_DIR.parent / "data"
+    user_agent: str = "FlatJai/0.1 (HKUST CSIT6000V student project; 1 request per 2 s per site)"
+    min_fetch_interval_s: float = 2.0  # per domain; robots.txt crawl-delay wins if longer
+    page_text_max_chars: int = 16_000  # ~6K tokens of mixed English/Chinese before extraction
+
+    # Agent budgets (90 s per brief; a laptop model may need more, set RUN_MAX_SECONDS)
+    run_max_seconds: float = 90.0
+
+    # Web UI origin allowed to call the API from the browser
+    cors_origins: list[str] = ["http://localhost:3000"]
+
 
 class ModelProfile(BaseModel):
     name: str
@@ -25,6 +39,11 @@ class ModelProfile(BaseModel):
     max_concurrency: int = 2
     json_schema: bool = True
     api_key: str = "not-needed"
+    # Extra JSON merged into every request, e.g. to turn off Qwen3 "thinking" for typed calls
+    extra_body: dict = {}
+    # Guards against a runaway generation (constrained decoding can loop on whitespace)
+    max_output_tokens: int = 1024
+    request_timeout_s: float = 120.0
 
 
 def load_profile(name: str, models_file: Path) -> ModelProfile:
