@@ -67,6 +67,7 @@ def facts(m: Match, profile: Profile) -> dict:
         "furnished": listing.furnished,
         "available_from": listing.available_from.isoformat() if listing.available_from else None,
         "commute_min_estimate": m.commute["minutes"] if m.commute else None,
+        "unknown_checks": sum(c.ok is None for c in m.checks),
     }
 
 
@@ -204,6 +205,9 @@ async def _ranked(
             picks.append((p.id, ok or code_reasons(table[p.id], profile)))
         # homes the model left out still appear, after its picks, ordered by value
         picks += [(i, code_reasons(table[i], profile)) for i in by_value if i not in {p for p, _ in picks}]
+        # homes whose hard limits are all confirmed come before homes with an unknown ("?") limit;
+        # the model's order is kept within each group (a far home with an unknown commute ranked #1: seen live)
+        picks.sort(key=lambda pick: table[pick[0]]["unknown_checks"])
         everything = set().union(*(allowed_numbers(f, profile, {len(table)}) for f in table.values()))
         summary_ok = supported(out.summary, everything)
         sp.attrs |= {"unsupported_claims": dropped + (not summary_ok), "summary_ok": summary_ok}

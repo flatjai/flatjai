@@ -16,7 +16,8 @@ from ..tracing import span
 from .clean import link_texts, page_links
 from .fetch import Fetcher, Page
 from .portals import Portal
-from .search import Searcher, SearchError, SearchResult
+from .preview import ListingPreview
+from .search import Searcher, SearchError, SearchResult, portal_results
 
 PAGE_MAX_AGE = timedelta(hours=24)
 SEARCH_MAX_AGE = timedelta(hours=6)
@@ -64,7 +65,7 @@ class CachedSearcher:
         row = await self.store.cache_get("search", key)
         if row is not None and _age(row.stored_at) <= self.max_age:
             async with span("search", "tool", query=query, cache="hit", results=len(row.value)):
-                return [SearchResult.model_validate(r) for r in row.value]
+                return _refiltered(row.value)
         try:
             results = await self.searcher.search(query, portal=portal, lang=lang)
         except SearchError:
@@ -76,8 +77,20 @@ class CachedSearcher:
             return results
         if row is not None and row.value:
             async with span("search", "tool", query=query, cache="stale", results=len(row.value)):
-                return [SearchResult.model_validate(r) for r in row.value]
+                return _refiltered(row.value)
         return results
+
+
+def _refiltered(cached: list[dict]) -> list[SearchResult]:
+    """Cached results pass today's filters: results stored before a rule existed (Amber listings in
+    Orlando, before the Hong Kong filter) must not come back from the cache (seen live)."""
+    raw = [{"url": r["url"], "title": r.get("title", ""), "content": r.get("snippet", "")} for r in cached]
+    previews = {r["url"]: r.get("preview") for r in cached}
+    kept = portal_results(raw)
+    for r in kept:
+        if previews.get(r.url):
+            r.preview = ListingPreview.model_validate(previews[r.url])
+    return kept
 
 
 def _age(stored_at: datetime) -> timedelta:

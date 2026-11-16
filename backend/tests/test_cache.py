@@ -3,6 +3,7 @@ from datetime import timedelta
 from conftest import LIST_URL
 
 from flatjai.tools.cache import CachedSearcher
+from flatjai.tools.portals import portal_for
 from flatjai.tools.search import SearchError, portal_results
 
 
@@ -41,3 +42,16 @@ async def test_error_without_cache_is_raised(store):
     except SearchError:
         return
     raise AssertionError("expected SearchError")
+
+
+async def test_cached_results_pass_todays_filters(store):
+    orlando = {
+        "url": "https://amberstudent.com/places/the-rook-orlando-2608063813595",
+        "title": "The Rook, Orlando",
+        "snippet": "",
+        "portal": "amber",
+        "kind": "listing",
+    }
+    await store.cache_put("search", "en|amber|room hang hau", [orlando])
+    amber = portal_for(orlando["url"])
+    assert await CachedSearcher(Engine(), store).search("room Hang Hau", portal=amber) == []

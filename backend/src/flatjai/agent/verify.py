@@ -17,7 +17,14 @@ ALWAYS_PRESENT = {"source_url", "portal", "title", "evidence", "agent_fee"}
 DEFAULTS = {"room_only": False}
 # The rent span must say it is rent: portals also show sale prices, price per ft² and mortgage
 # estimates ("Monthly：$14,623") on the same page, all as bare dollar figures.
-RENT_LABELS = ("rent", "租")
+RENT_LABELS = (
+    "rent",
+    "租",
+    "/month",
+    "/ month",
+    "per month",
+    "/mo",
+)  # "Monthly：$14,623" (a mortgage) is not one
 _SPACE = re.compile(r"\s+")
 
 

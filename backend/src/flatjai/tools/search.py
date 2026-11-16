@@ -6,6 +6,7 @@ Results are filtered to pages on portals we are allowed to read, and classified:
 Anything else (news, estate guides, blocked sites) is dropped before a fetch is spent on it.
 """
 
+import re
 from typing import Literal, Protocol
 
 import httpx
@@ -14,6 +15,8 @@ from pydantic import BaseModel
 from ..tracing import span
 from .portals import Portal, portal_for
 from .preview import ListingPreview, preview_from_card
+
+_HONG_KONG = re.compile(r"hong[\s-]?kong|hongkong|香港|kowloon|new territories")
 
 
 class SearchResult(BaseModel):
@@ -63,6 +66,9 @@ def portal_results(raw: list[dict]) -> list[SearchResult]:
         kind = "listing" if p.is_listing(url) else "list" if p.is_list(url) else None
         if kind is None:
             continue
+        said = f"{url} {r.get('title', '')} {r.get('content', '')}".lower()
+        if p.worldwide and (r.get("title") or r.get("content")) and not _HONG_KONG.search(said):
+            continue  # a web result from a worldwide site about another city (Orlando, Boston: seen live)
         seen.add(url)
         out.append(
             SearchResult(
@@ -80,7 +86,9 @@ async def expand_list(fetcher: _PageSource, url: str) -> list[SearchResult]:
     """Fetch a portal list page and return the single-listing links on it."""
     page = await fetcher.fetch(url)
     texts = getattr(page, "link_text", {}) or {}
-    results = [r for r in portal_results([{"url": u} for u in page.links]) if r.kind == "listing"]
+    # a link's card text is its title: on a worldwide site the Hong Kong filter then applies to it too
+    raw = [{"url": u, "title": texts.get(u, "")} for u in page.links]
+    results = [r for r in portal_results(raw) if r.kind == "listing"]
     for r in results:
         if card := texts.get(r.url):
             r.preview = preview_from_card(card)

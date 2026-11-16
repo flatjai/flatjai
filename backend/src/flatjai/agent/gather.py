@@ -25,7 +25,14 @@ LIST_PAGES_PER_QUERY = 1
 async def search_stage(ctx: RunContext, state: RunState) -> Stage:
     known = set(state.read_urls) | {c.url for c in state.candidates}
     per_query: list[list[SearchResult]] = []
-    for portal in readable_listing_portals():
+    profile = Profile.model_validate(state.profile)
+    portals = readable_listing_portals()
+    if profile.room_only:  # a student who wants a room: student-housing sites first
+        portals.sort(key=lambda p: not p.rooms)
+    for portal in portals:
+        if portal.rooms and portal.browse_url and state.round == 1:
+            # student-housing sites list their homes on one page: read it every first round
+            per_query.append(await _expand(ctx, state, portal.browse_url))
         hits = await asyncio.gather(*(_search(ctx, state, q, portal) for q in state.planned))
         state.queries += len(state.planned)
         for results in hits:
@@ -34,7 +41,7 @@ async def search_stage(ctx: RunContext, state: RunState) -> Stage:
                 listings += await _expand(ctx, state, page.url)
             listings += [r for r in results if r.kind == "listing"]
             per_query.append(listings)
-        if not any(per_query) and portal.browse_url and state.round == 1:
+        if not any(per_query) and portal.browse_url and not portal.rooms and state.round == 1:
             per_query.append(await _expand(ctx, state, portal.browse_url))
             state.notes.append(f"Web search found nothing, so FlatJai read {portal.name}'s own rental list.")
 
@@ -44,7 +51,6 @@ async def search_stage(ctx: RunContext, state: RunState) -> Stage:
             if r is not None and r.url not in known:
                 new.setdefault(r.url, r)
     # list-page pre-filter: skip what surely cannot fit before spending a fetch and a model call on it
-    profile = Profile.model_validate(state.profile)
     keep: list[SearchResult] = []
     for r in new.values():
         if reason := quick_reject(r.preview, profile):

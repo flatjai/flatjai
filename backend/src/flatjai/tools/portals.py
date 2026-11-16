@@ -2,7 +2,8 @@
 
 `allowed=False` means the site answers automated clients with a bot challenge (HTTP 403) or its
 terms rule us out. We never try to get around that: such URLs are dropped before fetching.
-Checked 2026-11-16; see docs/decisions/0002-listing-sources.md.
+`rooms=True` marks student-housing sites that list rooms (searched first when a student wants one).
+Checked 2026-11-16/17; see docs/decisions/0002-listing-sources.md and 0006-room-sources.md.
 """
 
 import re
@@ -17,7 +18,9 @@ class Portal:
     allowed: bool
     listing_path: re.Pattern[str] | None = None  # path of a single-listing page
     list_path: re.Pattern[str] | None = None  # path of a page listing many rentals (an area, an estate)
-    browse_url: str | None = None  # the portal's own list of rentals (fallback when web search is down)
+    browse_url: str | None = None  # the portal's own list of rentals, read once per search
+    rooms: bool = False  # lists rooms in shared flats or student residences
+    worldwide: bool = False  # lists other cities too: web results must mention Hong Kong
 
     def is_listing(self, url: str) -> bool:
         return _matches(self.listing_path, url)
@@ -42,8 +45,38 @@ PORTALS: tuple[Portal, ...] = (
         browse_url="https://hk.centanet.com/findproperty/en/list/rent",
     ),
     Portal(
+        name="uhomes",
+        domains=("en.uhomes.com",),
+        allowed=True,
+        # /hk/hongkong/detail-apartments-1579208 (a property with one or more room types)
+        listing_path=re.compile(r"^/hk/hongkong/detail-apartments-\d+/?$"),
+        list_path=re.compile(r"^/hk/hongkong/?$"),
+        browse_url="https://en.uhomes.com/hk/hongkong",
+        rooms=True,
+        worldwide=True,
+    ),
+    Portal(
+        name="amber",
+        domains=("amberstudent.com",),
+        allowed=True,
+        # /places/hkust-mansion-student-apartment-hongkong-2605047097905 (English pages only)
+        listing_path=re.compile(r"^/places/(?!search/)[a-z0-9-]+-\d{12,14}/?$"),
+        list_path=re.compile(r"^/places/search/hong-kong[a-z0-9-]*/?$"),
+        browse_url="https://amberstudent.com/places/search/hong-kong-china-2602036575849",
+        rooms=True,
+        worldwide=True,
+    ),
+    Portal(
         name="midland", domains=("www.midland.com.hk",), allowed=True
     ),  # pages render client-side; no reader yet
+    Portal(name="okay", domains=("www.okay.com",), allowed=True),  # whole flats, mostly expat; no reader yet
+    Portal(
+        name="savills", domains=("search.savills.com",), allowed=False
+    ),  # empty 202 to bots, names AI crawlers
+    Portal(
+        name="hongkonghomes", domains=("hongkonghomes.com",), allowed=True
+    ),  # client-side rendered; no reader
+    Portal(name="expat", domains=("www.expat.com",), allowed=False),  # terms forbid reproducing content
     Portal(name="28hse", domains=("www.28hse.com",), allowed=False),
     Portal(name="spacious", domains=("www.spacious.hk",), allowed=False),
     Portal(name="squarefoot", domains=("www.squarefoot.com.hk",), allowed=False),

@@ -10,6 +10,7 @@ from datetime import timedelta
 
 from ..schemas import Listing, Profile
 from ..tools.cost import Cost
+from ..tools.portals import portal_for
 from ..tools.preview import ListingPreview
 from .plan import candidate_areas
 from .state import Check, Match
@@ -44,13 +45,12 @@ def hard_checks(listing: Listing, cost: Cost, profile: Profile) -> list[Check]:
         detail = f"rent HK${rent:,}/month{split}, {kind} HK${profile.budget_hkd_month:,}"
         checks.append(Check(name="budget", ok=ok, detail=detail, value=rent))
     if profile.room_only is True:
-        checks.append(
-            Check(
-                name="room",
-                ok=listing.room_only,
-                detail="room" if listing.room_only else "whole flat, not a room",
-            )
-        )
+        if listing.room_only:
+            checks.append(Check(name="room", ok=True, detail="room"))
+        elif _rooms_site(listing):  # a student-housing site that did not say: unknown, not a whole flat
+            checks.append(Check(name="room", ok=None, detail="room or whole flat not stated"))
+        else:
+            checks.append(Check(name="room", ok=False, detail="whole flat, not a room"))
     if profile.bedrooms:
         if listing.bedrooms is None:
             checks.append(Check(name="bedrooms", ok=None, detail="bedrooms not stated"))
@@ -110,6 +110,11 @@ def same_home(a: Listing, b: Listing) -> bool:
     ):
         return False
     return abs(a.rent_hkd_month - b.rent_hkd_month) <= 0.05 * a.rent_hkd_month
+
+
+def _rooms_site(listing: Listing) -> bool:
+    portal = portal_for(str(listing.source_url))
+    return bool(portal and portal.rooms)
 
 
 def mark_duplicates(matches: list[Match]) -> int:

@@ -185,7 +185,7 @@ async def test_replan_when_nothing_fits(store):
     events, state, fake, _ = await run(
         store, replies, searcher=searcher, budget=Budget(max_rounds=2), brief="flat near HKUST, 10k max"
     )
-    assert searcher.queries == ["Hang Hau flat", "Po Lam flat"]
+    assert list(dict.fromkeys(searcher.queries)) == ["Hang Hau flat", "Po Lam flat"]  # once per portal
     plan_prompt = [r for r in fake.requests if r["response_format"]["json_schema"]["name"] == "SearchPlan"][1]
     assert "cheaper areas" in plan_prompt["messages"][1]["content"]
     assert "Hang Hau flat" in plan_prompt["messages"][1]["content"]  # told what was tried

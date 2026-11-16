@@ -13,12 +13,13 @@ import openai
 
 from ..schemas import Listing, Profile
 from ..tools.cost import cost
-from ..tools.extract import EXTRACTOR_VERSION, NotAListing, extract_listing
+from ..tools.extract import EXTRACTOR_VERSION, NotAListing, SoldOut, extract_listing, tidy_title
 from ..tools.fetch import FetchBlocked, FetchError, Page
+from ..tools.geocode import Place as GeoPlace
 from ..tools.portals import portal_for
 from ..tools.preview import preview_from_page
 from ..tools.search import SearchResult
-from ..tools.transit import CAMPUSES, Commute, commute
+from ..tools.transit import CAMPUSES, Commute, commute, station_named_in
 from ..tracing import span
 from .context import RunContext
 from .match import hard_checks, quick_reject, with_commute
@@ -108,6 +109,7 @@ async def read_one(ctx: RunContext, result: SearchResult, profile: Profile) -> t
         return None, row.outcome
 
     listing = Listing.model_validate(row.data)
+    listing.title = tidy_title(listing.title)  # extractions cached before a cleaning rule get it too
     c = cost(listing)
     checks = hard_checks(listing, c, profile)
     trip = await _commute(ctx, listing, profile)
@@ -131,21 +133,30 @@ async def _commute(ctx: RunContext, listing: Listing, profile: Profile) -> tuple
     key = campus_key(profile.campus)
     if ctx.tools.geocoder is None or key not in CAMPUSES:
         return None
-    place = await ctx.tools.geocoder.locate(geocode_name(listing), listing.district)
+    # the building, else an MTR station named in the title or address, else the district
+    geo = ctx.tools.geocoder
+    place = await geo.building(geocode_name(listing), listing.district)
+    if place is None and (station := station_named_in(listing.title, listing.address, listing.estate)):
+        place = GeoPlace(lat=station.lat, lon=station.lon, matched=station.name, precision="area")
+    place = place or await geo.area(listing.district)
     if place is None:
         return None
-    async with span("commute", "tool", campus=key, home=[place.lat, place.lon]) as sp:
-        journey = commute((place.lat, place.lon), key)
+    lat, lon, precision = place.lat, place.lon, place.precision
+    async with span("commute", "tool", campus=key, home=[lat, lon], precision=precision) as sp:
+        journey = commute((lat, lon), key)
         sp.attrs["minutes"] = journey.minutes if journey else None
-    return (journey, place.precision) if journey else None
+    return (journey, precision) if journey else None
 
 
 def geocode_name(listing: Listing) -> str | None:
-    """The estate or building to look up: 'Hang Hau · RESIDENCE OASIS・Tower 2' -> 'RESIDENCE OASIS'."""
+    """The estate or building to look up: the estate, else the title part that is not the district
+    ('Hang Hau · RESIDENCE OASIS・Tower 2' -> 'RESIDENCE OASIS'; 'Hang Hau Metro City' stays whole)."""
     if listing.estate:
         return listing.estate
-    title = listing.title.split("·")[-1]
-    return title.split("・")[0].strip() or None
+    district = (listing.district or "").lower()
+    parts = [p.split("・")[0].strip() for p in listing.title.split("·")]
+    named = [p for p in parts if p and p.lower() != district]
+    return named[0] if named else (parts[0] or None)
 
 
 async def _extract(
@@ -157,6 +168,8 @@ async def _extract(
         verified = verify_listing(listing, page.text)
     except NotAListing:
         return None, [], "not a listing"
+    except SoldOut:
+        return None, [], "sold out"
     except Unsupported:
         return None, [], "unsupported rent"
     except ValueError:  # still invalid after the repair retry
