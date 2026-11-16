@@ -51,3 +51,12 @@ def test_route_has_home_stations_and_campus_for_the_map():
     assert [p.name for p in c.route[1:3]] == ["Alpha", "Charlie"]
     direct = commute((22.30, 114.195), "UNI", NET, CAMPUS)
     assert [p.kind for p in direct.route] == ["home", "campus"]
+
+
+def test_a_station_named_in_the_title_places_a_home():
+    from flatjai.tools.transit import station_named_in
+
+    assert station_named_in("Dwell Prince Edward, Hong Kong").name == "Prince Edward"
+    assert station_named_in("Hang Hau Metro City", None).name == "Hang Hau"
+    assert station_named_in("Something Mong Kok East").name == "Mong Kok East"  # longest name wins
+    assert station_named_in("Residence Oasis") is None

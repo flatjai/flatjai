@@ -77,8 +77,11 @@ async def test_read_stage_adds_the_commute(store, monkeypatch):
     from flatjai.tools.transit import Commute, Leg
 
     class FakeGeocoder:
-        async def locate(self, name, district):
+        async def building(self, name, district):
             return Place(lat=22.315, lon=114.264, matched=name or "", precision="building")
+
+        async def area(self, district):
+            return None
 
     monkeypatch.setattr(
         read,
@@ -143,3 +146,65 @@ async def test_building_far_from_its_district_is_not_trusted(store):
     )
     place = await Geocoder(http, store).locate("Garden Vista", "Hang Hau")
     assert place.precision == "area" and place.lat == 22.315
+
+
+async def test_a_vague_district_places_nothing(store):
+    http, calls = als({"Hong Kong": [("HONG KONG", None, 22.28, 114.16, 90)]})
+    g = Geocoder(http, store)
+    assert await g.area("Hong Kong") is None and await g.area("Kowloon") is None
+    assert calls == []
+
+
+async def test_station_named_in_the_title_places_a_home_when_the_building_is_unknown(monkeypatch):
+    from flatjai.agent import read
+    from flatjai.agent.context import Toolbox
+    from flatjai.schemas import Listing, Profile
+    from flatjai.tools.transit import Commute, network
+
+    class NoBuilding:
+        async def building(self, name, district):
+            return None
+
+        async def area(self, district):
+            return None
+
+    seen = {}
+
+    def fake_commute(home, key):
+        seen["home"] = home
+        return Commute(minutes=17, legs=[])
+
+    monkeypatch.setattr(read, "commute", fake_commute)
+    ctx = type("Ctx", (), {"tools": Toolbox(None, None, None, geocoder=NoBuilding())})()
+    listing = Listing(
+        source_url="https://en.uhomes.com/hk/hongkong/detail-apartments-1",
+        portal="uhomes",
+        title="Hang Hau Metro City",
+        rent_hkd_month=7700,
+        district="Hong Kong",
+    )
+    journey, precision = await read._commute(ctx, listing, Profile(campus="HKUST"))
+    hah = network().stations["HAH"]
+    assert seen["home"] == (hah["lat"], hah["lon"]) and precision == "area"
+
+
+def test_worldwide_list_page_links_keep_hong_kong_only():
+    import asyncio
+
+    from flatjai.tools.search import expand_list
+
+    class ListPage:
+        links = [
+            "https://amberstudent.com/places/dwell-ho-man-tin-hong-kong-2605287178625",
+            "https://amberstudent.com/places/the-rook-orlando-2608063813595",
+        ]
+        link_text = {links[0]: "Dwell Ho Man Tin, Hong Kong Kowloon, HK", links[1]: "The Rook, Orlando, FL"}
+
+    class Fetcher:
+        async def fetch(self, url):
+            return ListPage()
+
+    found = asyncio.run(
+        expand_list(Fetcher(), "https://amberstudent.com/places/search/hong-kong-china-2602036575849")
+    )
+    assert [r.url for r in found] == [ListPage.links[0]]

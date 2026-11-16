@@ -19,6 +19,7 @@ Station data: data/mtr.json, built by scripts/build_mtr.py.
 import heapq
 import json
 import math
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -154,6 +155,18 @@ def ride_minutes(net: Network, origin: str, targets: set[str]) -> dict[str, floa
             if nxt not in dist:
                 heapq.heappush(heap, (d + w, nxt))
     return best
+
+
+def station_named_in(*texts: str | None) -> Place | None:
+    """An MTR station named in a listing's title or address ("Dwell Prince Edward", "Hang Hau Village")
+    places a home roughly when its building cannot be found. Longest name first, so "Mong Kok East"
+    beats "Mong Kok"."""
+    net = network()
+    said = " ".join(t for t in texts if t).lower()
+    for st in sorted(net.stations.values(), key=lambda s: -len(s["name"])):
+        if re.search(rf"\b{re.escape(st['name'].lower())}\b", said):
+            return Place(name=st["name"], kind="station", lat=st["lat"], lon=st["lon"])
+    return None
 
 
 def access(net: Network, home: tuple[float, float], code: str) -> Leg:

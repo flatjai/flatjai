@@ -15,6 +15,7 @@ from ..tracing import span
 from .transit import distance_m
 
 ALS_URL = "https://www.als.gov.hk/lookup"
+VAGUE_AREAS = {"hong kong", "hk", "kowloon", "new territories", "nt", "hong kong island", "hong kong (china)"}
 MAX_FROM_DISTRICT_M = 3000  # a building match further than this from its district is not trusted
 _ROAD = re.compile(r"\b(road|street|avenue|lane|highway|rd|st)\.?$", re.I)
 MIN_SCORE = 50.0
@@ -57,22 +58,32 @@ class Geocoder:
         self.http, self.store = http, store
 
     async def locate(self, name: str | None, district: str | None) -> Place | None:
-        """Building first (name + district), then the district on its own.
+        """The building, else the district (see building() and area())."""
+        return await self.building(name, district) or await self.area(district)
+
+    async def area(self, district: str | None) -> Place | None:
+        """The district's centre; None for names too vague to place a home ("Hong Kong", "Kowloon")."""
+        if not district or district.strip().lower() in VAGUE_AREAS:
+            return None
+        return await self._lookup(district, must_match=district, precision="area")
+
+    async def building(self, name: str | None, district: str | None) -> Place | None:
+        """The building, only when ALS matches every word of its name, near its district.
 
         A road is not a building: "Clear Water Bay Road" runs from Choi Hung to past HKUST, and its
         lookup placed a Choi Hung flat next to campus (seen live). And a building match far from the
         listing's district is rejected: the words agreed, the place did not."""
-        area = await self._lookup(district, must_match=district, precision="area") if district else None
-        if name and not _ROAD.search(name.strip()):
-            query = f"{name} {district or ''}".strip()
-            if place := await self._lookup(query, must_match=name, precision="building"):
-                near = (
-                    area is None
-                    or distance_m((place.lat, place.lon), (area.lat, area.lon)) <= MAX_FROM_DISTRICT_M
-                )
-                if near:
-                    return place
-        return area
+        if not name or _ROAD.search(name.strip()):
+            return None
+        area = await self.area(district)
+        specific = district if district and district.strip().lower() not in VAGUE_AREAS else ""
+        query = f"{name} {specific}".strip()
+        place = await self._lookup(query, must_match=name, precision="building")
+        if place and (
+            area is None or distance_m((place.lat, place.lon), (area.lat, area.lon)) <= MAX_FROM_DISTRICT_M
+        ):
+            return place
+        return None
 
     async def _lookup(self, query: str, must_match: str, precision: str) -> Place | None:
         key = f"{precision}|{query.lower()}"
