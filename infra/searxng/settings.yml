@@ -1,0 +1,9 @@
+# SearXNG for FlatJai: local only, JSON API on, limiter off (the only client is our backend).
+use_default_settings: true
+server:
+  secret_key: "flatjai-local-only-not-a-secret"
+  limiter: false
+  image_proxy: false
+search:
+  safe_search: 0
+  formats: [html, json]
