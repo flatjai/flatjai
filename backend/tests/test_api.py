@@ -155,3 +155,18 @@ async def test_interrupted_run_resumes_on_startup(store):
     assert events[3].data["stage"] == "read" and events[-1].type == "done"
     assert any("resumed" in n for n in events[-1].data["notes"])
     assert (await store.get_run("r1")).status == "done"
+
+
+async def test_conversations_group_a_brief_with_its_replies(client):
+    first = await start(client, brief="flat near campus")
+    await client.get(f"/runs/{first['run_id']}/events")
+    second = await start(client, brief="HKUST, 15k", session_id=first["session_id"])
+    await client.get(f"/runs/{second['run_id']}/events")
+    other = await start(client, brief="studio near HKU")
+    await client.get(f"/runs/{other['run_id']}/events")
+    for r in (first, second, other):
+        await finished(r["run_id"])
+    convos = (await client.get("/sessions")).json()
+    assert [c["session_id"] for c in convos] == [other["session_id"], first["session_id"]]  # newest first
+    assert [r["brief"] for r in convos[1]["runs"]] == ["flat near campus", "HKUST, 15k"]  # in order
+    assert convos[1]["runs"][0]["homes"] >= 1

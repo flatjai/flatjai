@@ -79,6 +79,43 @@ class Store:
         async with self._s() as s:
             return list((await s.scalars(select(m.Run).order_by(m.Run.started_at.desc()).limit(limit))).all())
 
+    async def conversations(self, limit: int = 30) -> list[dict]:
+        """Recent sessions, newest first, each with its runs in order and how many homes each found."""
+        async with self._s() as s:
+            homes = (
+                select(m.ShortlistItem.run_id, func.count().label("homes"))
+                .group_by(m.ShortlistItem.run_id)
+                .subquery()
+            )
+            q = (
+                select(m.Run, func.coalesce(homes.c.homes, 0))
+                .outerjoin(homes, homes.c.run_id == m.Run.id)
+                .order_by(m.Run.started_at.desc())
+                .limit(limit * 10)
+            )
+            rows = (await s.execute(q)).all()
+        sessions: dict[str, dict] = {}
+        for run, n in rows:
+            sess = sessions.setdefault(run.session_id, {"session_id": run.session_id, "runs": []})
+            sess["runs"].append(
+                {
+                    "id": run.id,
+                    "brief": run.brief,
+                    "status": run.status,
+                    "started_at": run.started_at,
+                    "ended_at": run.ended_at,
+                    "model": run.model,
+                    "homes": n,
+                }
+            )
+        out = []
+        for sess in list(sessions.values())[:limit]:
+            sess["runs"].sort(key=lambda r: r["started_at"])
+            sess["started_at"] = sess["runs"][0]["started_at"]
+            sess["last_at"] = sess["runs"][-1]["started_at"]
+            out.append(sess)
+        return out
+
     async def unfinished_runs(self) -> list[m.Run]:
         async with self._s() as s:
             return list((await s.scalars(select(m.Run).where(m.Run.status == "running"))).all())

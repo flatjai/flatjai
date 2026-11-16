@@ -145,6 +145,29 @@ async def list_runs(request: Request, limit: int = 30) -> list:
     return await request.app.state.store.list_runs(min(limit, 200))
 
 
+class TurnInfo(BaseModel):
+    id: str
+    brief: str
+    status: str
+    started_at: datetime
+    ended_at: datetime | None
+    model: str
+    homes: int
+
+
+class Conversation(BaseModel):
+    session_id: str
+    started_at: datetime
+    last_at: datetime
+    runs: list[TurnInfo]
+
+
+@app.get("/sessions", response_model=list[Conversation])
+async def list_conversations(request: Request, limit: int = 30) -> list:
+    """Conversations for the run inspector: a brief, the replies that continued it, and their runs."""
+    return await request.app.state.store.conversations(min(limit, 100))
+
+
 @app.get("/runs/{run_id}", response_model=RunInfo)
 async def get_run(run_id: str, request: Request):
     run = await request.app.state.store.get_run(run_id)
