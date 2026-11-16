@@ -161,12 +161,24 @@ def test_total_budget_compares_the_whole_rent_never_a_share():
 
 
 def test_budget_claims_must_compare_the_rent():
-    from flatjai.agent.answer import fair_budget_claim
+    from flatjai.agent.answer import fair_claim
 
     p = Profile(budget_hkd_month=15000, flatmates=1)
     f = FACTS | {"rent_hkd": 19000, "rent_for_you_hkd": 9500, "monthly_all_in_hkd": 19600}
-    assert not fair_budget_claim("Monthly all-in cost is HK$19,600, under your budget of HK$15,000", f, p)
-    assert fair_budget_claim("HK$9,500 rent a month for you, HK$5,500 under your budget", f, p)
-    assert fair_budget_claim("About HK$19,600 a month all in", f, p)  # no budget claim: other checks apply
+    assert not fair_claim("Monthly all-in cost is HK$19,600, under your budget of HK$15,000", f, p)
+    assert fair_claim("HK$9,500 rent a month for you, HK$5,500 under your budget", f, p)
+    assert fair_claim("About HK$19,600 a month all in", f, p)  # no budget claim: other checks apply
 
-    assert not fair_budget_claim("Rent_for_you_hkd is HK$9,500, within your HK$15,000 budget", f, p)
+    assert not fair_claim("Rent_for_you_hkd is HK$9,500, within your HK$15,000 budget", f, p)
+
+
+def test_preference_claims_must_match_what_the_student_named():
+    from flatjai.agent.answer import fair_claim
+
+    p = Profile(budget_hkd_month=15000, districts=["Diamond Hill", "Choi Hung"], soft_preferences=["quiet"])
+    tko = FACTS | {"district": "Tseung Kwan O"}
+    assert not fair_claim("It's in Tseung Kwan O, which is one of your preferred districts.", tko, p)
+    assert fair_claim(
+        "It's in Diamond Hill, one of your preferred areas.", FACTS | {"district": "Diamond Hill"}, p
+    )
+    assert fair_claim("A quiet estate, as you preferred.", tko, p)

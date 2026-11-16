@@ -43,7 +43,8 @@ All homes given already meet their hard limits. Order them best first for this s
 their soft preferences and value for money, and give 1-3 short reasons for each.
 Only state facts that appear in the home's data. Write money as HK$ with commas, e.g. HK$9,600.
 The student's budget is a monthly RENT budget: compare it only with rent_for_you_hkd ("your rent" or
-"your share of the rent"), never with the all-in cost. Never write the data's field names.
+"your share of the rent"), never with the all-in cost. Never write the data's field names. Call a district "preferred" only if
+the student named it.
 If a preference cannot be checked from the data (e.g. "quiet"), do not claim it.
 The summary is two short sentences to the student. Reply with JSON only."""
 
@@ -102,18 +103,33 @@ def budgeted(f: dict, profile: Profile) -> int:
     return f["rent_for_you_hkd"]
 
 
-def fair_budget_claim(text: str, f: dict, profile: Profile) -> bool:
-    """A reason that talks about the budget may only use the rent it is compared with, the budget
-    and their difference. Every number can be real and the claim still false: "all-in HK$19,600 is
+def fair_claim(text: str, f: dict, profile: Profile) -> bool:
+    """Claims that can be true number by number and still false as a whole. No field names; a "your
+    preferred district" claim only for a district the student named; and a reason that talks about
+    the budget may only use the rent it is compared with, the budget and their difference. Every number can be real and the claim still false: "all-in HK$19,600 is
     under your HK$15,000 budget" (seen live)."""
     if _FIELD_NAME.search(text):
         return False  # the model echoed a field name ("Rent_for_you_hkd is HK$9,000")
+    if re.search(r"prefer|you asked|you wanted|your choice", text, re.I) and not _named_by_student(
+        text, f, profile
+    ):
+        return False  # "in Tseung Kwan O, one of your preferred districts" when the student named others (seen live)
     if not profile.budget_hkd_month or "budget" not in text.lower():
         return True
     budget, rent = profile.budget_hkd_month, f["rent_for_you_hkd"]
     allowed = {budget, rent, budget - rent} | SMALL_COUNTS
     money = {int(float(raw.replace(",", ""))) for raw, _unit in _NUMBER.findall(text)}
     return money <= allowed and rent <= budget
+
+
+def _named_by_student(text: str, f: dict, profile: Profile) -> bool:
+    """A claim that a home matches the student's stated preference holds only if the home's district
+    is one the student named, or the preference it cites is in their soft preferences."""
+    district = (f.get("district") or "").lower()
+    named = [d.lower() for d in profile.districts]
+    if district and any(d in district or district in d for d in named):
+        return True
+    return any(p.lower() in text.lower() for p in profile.soft_preferences)
 
 
 def code_reasons(f: dict, profile: Profile) -> list[str]:
@@ -182,8 +198,7 @@ async def _ranked(
             ok = [
                 r
                 for r in p.reasons
-                if supported(r, allowed_numbers(table[p.id], profile))
-                and fair_budget_claim(r, table[p.id], profile)
+                if supported(r, allowed_numbers(table[p.id], profile)) and fair_claim(r, table[p.id], profile)
             ]
             dropped += len(p.reasons) - len(ok)
             picks.append((p.id, ok or code_reasons(table[p.id], profile)))
