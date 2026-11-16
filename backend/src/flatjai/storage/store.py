@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -141,9 +143,21 @@ class Store:
             )
             return await s.scalar(q)
 
-    async def put_page(self, **values: Any) -> None:
+    async def _upsert(self, table, values: dict, keys: list[str]) -> None:
+        """INSERT ... ON CONFLICT DO UPDATE in one statement. `merge` (select, then insert) races when
+        concurrent reads write the same key: two lookups of one district both missed the cache and
+        the second insert failed the unique key, ending the run (seen live)."""
+        dialect = self.engine.dialect.name
+        insert = pg_insert if dialect == "postgresql" else sqlite_insert
+        stmt = insert(table).values(**values)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=keys, set_={k: stmt.excluded[k] for k in values if k not in keys}
+        )
         async with self._s.begin() as s:
-            await s.merge(m.Page(**values))  # same bytes -> same hash -> same row
+            await s.execute(stmt)
+
+    async def put_page(self, **values: Any) -> None:
+        await self._upsert(m.Page.__table__, values, ["page_hash"])  # same bytes -> same hash -> same row
 
     async def extraction(self, page_hash: str, version: str, model: str) -> m.Listing | None:
         async with self._s() as s:
@@ -197,12 +211,14 @@ class Store:
             return row
 
     async def cache_put(self, namespace: str, key: str, value: Any) -> None:
-        async with self._s.begin() as s:
-            await s.merge(
-                m.CacheEntry(
-                    namespace=namespace, key_hash=self._hash(key), key=key, value=value, stored_at=m.utcnow()
-                )
-            )
+        row = {
+            "namespace": namespace,
+            "key_hash": self._hash(key),
+            "key": key,
+            "value": value,
+            "stored_at": m.utcnow(),
+        }
+        await self._upsert(m.CacheEntry.__table__, row, ["namespace", "key_hash"])
 
     # traces ----------------------------------------------------------------------------------
 

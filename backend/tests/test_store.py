@@ -39,3 +39,30 @@ async def test_events_replay_in_order(store: Store):
     for seq in (2, 1, 3):
         await store.add_event("r", seq, "progress", {"n": seq})
     assert [e.seq for e in await store.events("r")] == [1, 2, 3]
+
+
+async def test_concurrent_writes_of_the_same_cache_key_do_not_fail(store):
+    import asyncio
+
+    await asyncio.gather(
+        *(store.cache_put("geocode", "area|diamond hill", {"lat": 22.34, "n": i}) for i in range(8))
+    )
+    row = await store.cache_get("geocode", "area|diamond hill")
+    assert row.value["lat"] == 22.34
+
+
+async def test_storing_the_same_page_twice_keeps_one_row(store):
+    from datetime import UTC, datetime
+
+    common = {
+        "final_url": "u",
+        "title": "t",
+        "text": "x",
+        "http_status": 200,
+        "fetched_at": datetime.now(UTC),
+    }
+    await store.put_page(page_hash="h", url="https://a/1", **common)
+    await store.put_page(page_hash="h", url="https://a/2", **common)
+    assert (
+        await store.fresh_page("https://a/2", __import__("datetime").timedelta(hours=1), datetime.now(UTC))
+    ).page_hash == "h"
