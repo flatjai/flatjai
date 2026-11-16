@@ -56,7 +56,7 @@ async def test_results_are_cached(store):
     g = Geocoder(http, store)
     await g.locate("LUNG POON COURT", "Diamond Hill")
     await g.locate("LUNG POON COURT", "Diamond Hill")
-    assert calls == ["LUNG POON COURT Diamond Hill"]
+    assert calls == ["Diamond Hill", "LUNG POON COURT Diamond Hill"]  # the second lookup is all cache
 
 
 def test_commute_replaces_the_area_check():
@@ -116,3 +116,30 @@ async def test_one_shared_word_is_not_a_match(store):
     )
     place = await Geocoder(http, store).locate("Sierra Sea", "Sai Sha")
     assert place.precision == "area" and place.lat == 22.42
+
+
+async def test_a_road_is_not_a_building(store):
+    http, calls = als(
+        {
+            "Choi Hung": [("CHOI HUNG ESTATE", None, 22.335, 114.207, 70)],
+            "Clear Water Bay Road Choi Hung": [
+                ("X", "CLEAR WATER BAY ROAD", 22.333, 114.258, 80)
+            ],  # near HKUST
+        }
+    )
+    place = await Geocoder(http, store).locate("Clear Water Bay Road", "Choi Hung")
+    assert place.precision == "area" and place.lon == 114.207
+    assert "Clear Water Bay Road Choi Hung" not in calls
+
+
+async def test_building_far_from_its_district_is_not_trusted(store):
+    http, _ = als(
+        {
+            "Hang Hau": [("HANG HAU VILLAGE", None, 22.315, 114.264, 70)],
+            "Garden Vista Hang Hau": [
+                ("GARDEN VISTA", "GARDEN VISTA", 22.38, 114.19, 80)
+            ],  # Sha Tin, ~10 km off
+        }
+    )
+    place = await Geocoder(http, store).locate("Garden Vista", "Hang Hau")
+    assert place.precision == "area" and place.lat == 22.315

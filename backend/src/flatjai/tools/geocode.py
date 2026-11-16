@@ -12,8 +12,11 @@ from pydantic import BaseModel
 
 from ..storage.store import Store
 from ..tracing import span
+from .transit import distance_m
 
 ALS_URL = "https://www.als.gov.hk/lookup"
+MAX_FROM_DISTRICT_M = 3000  # a building match further than this from its district is not trusted
+_ROAD = re.compile(r"\b(road|street|avenue|lane|highway|rd|st)\.?$", re.I)
 MIN_SCORE = 50.0
 STOPWORDS = {
     "the",
@@ -54,15 +57,22 @@ class Geocoder:
         self.http, self.store = http, store
 
     async def locate(self, name: str | None, district: str | None) -> Place | None:
-        """Building first (name + district), then the district on its own."""
-        if name:
-            if place := await self._lookup(
-                f"{name} {district or ''}".strip(), must_match=name, precision="building"
-            ):
-                return place
-        if district:
-            return await self._lookup(district, must_match=district, precision="area")
-        return None
+        """Building first (name + district), then the district on its own.
+
+        A road is not a building: "Clear Water Bay Road" runs from Choi Hung to past HKUST, and its
+        lookup placed a Choi Hung flat next to campus (seen live). And a building match far from the
+        listing's district is rejected: the words agreed, the place did not."""
+        area = await self._lookup(district, must_match=district, precision="area") if district else None
+        if name and not _ROAD.search(name.strip()):
+            query = f"{name} {district or ''}".strip()
+            if place := await self._lookup(query, must_match=name, precision="building"):
+                near = (
+                    area is None
+                    or distance_m((place.lat, place.lon), (area.lat, area.lon)) <= MAX_FROM_DISTRICT_M
+                )
+                if near:
+                    return place
+        return area
 
     async def _lookup(self, query: str, must_match: str, precision: str) -> Place | None:
         key = f"{precision}|{query.lower()}"
