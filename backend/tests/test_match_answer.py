@@ -141,3 +141,13 @@ def test_area_check_until_real_commutes():
     assert checks(p, district="Tuen Mun")["area"].ok is False
     assert checks(p)["area"].ok is None  # district not stated
     assert "area" not in checks(Profile(campus="HKUST"), district="Tuen Mun")  # no commute limit given
+
+
+def test_total_budget_hides_the_per_person_share_from_the_model():
+    from flatjai.agent.answer import facts
+
+    p = Profile(budget_hkd_month=30000, flatmates=1, budget_is_total=True)
+    m = match(1, p, rent_hkd_month=19000)
+    f = facts(m, p)
+    assert f["your_monthly_share_hkd"] is None and f["monthly_all_in_hkd"] == 19600
+    assert not supported("Monthly share is HK$9,800, under your budget of HK$30,000", allowed_numbers(f, p))

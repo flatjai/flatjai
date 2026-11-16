@@ -54,7 +54,9 @@ def facts(m: Match, profile: Profile) -> dict:
         "district": listing.district,
         "rent_hkd": listing.rent_hkd_month,
         "monthly_all_in_hkd": m.cost["monthly_hkd"],
-        "your_monthly_share_hkd": your_share(_cost(m), listing, profile),
+        # with a total (household) budget the whole flat's cost is what counts: no per-person share, so
+        # the model cannot set a share against the total ("HK$9,800 under your budget of HK$30,000")
+        "your_monthly_share_hkd": None if profile.budget_is_total else your_share(_cost(m), listing, profile),
         "move_in_cost_hkd": m.cost["move_in_hkd"],
         "saleable_sqft": listing.saleable_sqft,
         "gross_sqft": listing.gross_sqft,
@@ -142,12 +144,12 @@ async def _ranked(
     ctx: RunContext, profile: Profile, table: dict[int, dict]
 ) -> tuple[list[tuple[int, list[str]]], str]:
     size = ctx.budget.shortlist_size
-    by_value = sorted(table, key=lambda i: table[i]["your_monthly_share_hkd"])
+    by_value = sorted(table, key=lambda i: budgeted(table[i], profile))
     fallback = [(i, code_reasons(table[i], profile)) for i in by_value[:size]]
     cheapest = table[by_value[0]]
     fallback_summary = (
         f"{len(table)} home(s) meet your limits. The best value is {cheapest['title']} at "
-        f"HK${cheapest['your_monthly_share_hkd']:,} a month for you."
+        f"HK${budgeted(cheapest, profile):,} a month {'all in' if profile.budget_is_total else 'for you'}."
     )
     async with span("explain+check", "stage", homes=len(table)) as sp:
         try:
