@@ -1,0 +1,6 @@
+# FlatJai's local model: qwen3:8b with a 16K context window.
+# Ollama loads models with a 4,096-token context by default and its OpenAI-compatible endpoint
+# ignores context settings, so a listing page plus schema would be cut off. Build once with:
+#   ollama create flatjai-qwen3-8b -f deploy/ollama/Modelfile
+FROM qwen3:8b
+PARAMETER num_ctx 16384
