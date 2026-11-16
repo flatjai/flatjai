@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowSquareOut, Bed, CaretDown, Check, Question, Ruler, Train, X } from "@phosphor-icons/react";
+import { ArrowSquareOut, CaretDown, Check, Question, Train, X } from "@phosphor-icons/react";
 import { useState } from "react";
 
 import type { Card, Check as CheckT, CostItem } from "@/lib/api";
@@ -55,17 +55,22 @@ function Items({ items }: { items: CostItem[] }) {
   );
 }
 
-type Props = { card: Card; rank?: number | null; reasons?: string[] };
+type Props = { card: Card; rank?: number | null; reasons?: string[]; campus?: string | null };
 
-export function ListingCard({ card, rank = null, reasons = [] }: Props) {
-  const { listing: l, cost } = card;
+const portalName = (p: string) => p.charAt(0).toUpperCase() + p.slice(1);
+
+export function ListingCard({ card, rank = null, reasons = [], campus = null }: Props) {
+  const { listing: l, cost, commute } = card;
   const [open, setOpen] = useState(false);
   const ev = l.evidence;
   const size = l.saleable_sqft ? `${l.saleable_sqft} ft²` : l.gross_sqft ? `${l.gross_sqft} ft² gross` : null;
   const beds = l.bedrooms === null ? null : l.bedrooms === 0 ? "Studio" : `${l.bedrooms} bed`;
+  // the rent the budget was checked against: the student's share when a flat is shared
+  const budget = card.checks.find((c) => c.name === "budget");
+  const share = budget?.value && budget.value !== l.rent_hkd_month ? budget.value : null;
 
   return (
-    <article className="fj-arrive-glow flex flex-col gap-4 rounded-2xl bg-surface p-5">
+    <article className="fj-arrive-glow flex flex-col gap-5 rounded-2xl bg-surface p-5">
       <header className="flex items-start gap-3">
         {rank ? (
           <span className="fj-sunset grid size-8 flex-none place-items-center rounded-full text-sm font-bold">
@@ -74,53 +79,54 @@ export function ListingCard({ card, rank = null, reasons = [] }: Props) {
         ) : null}
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-[15px] font-semibold text-fg">{l.title}</h3>
-          <p className="truncate text-sm text-muted">{[l.district, l.address].filter(Boolean).join(" · ") || "Hong Kong"}</p>
+          <p className="truncate text-sm text-muted">
+            {[l.district, l.address].filter(Boolean).join(" · ") || "Hong Kong"}
+            {size ? ` · ${size}` : ""}
+            {beds ? ` · ${beds}` : ""}
+          </p>
         </div>
       </header>
 
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <p className="text-[28px] leading-none font-bold tracking-tight tabular-nums" title={ev.rent_hkd_month ? `From the page: “${ev.rent_hkd_month}”` : undefined}>
-            {hkd(cost.monthly_hkd)}
-            <span className="ml-1 text-sm font-normal whitespace-nowrap text-muted">/month all in</span>
+      {/* the two figures a student decides on: what the rent is, and how long the journey takes */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="min-w-0">
+          <p className="text-xs font-medium tracking-wide text-faint uppercase">Rent</p>
+          <p
+            className="mt-1 text-[34px] leading-none font-bold tracking-tight tabular-nums"
+            title={ev.rent_hkd_month ? `From the page: “${ev.rent_hkd_month}”` : undefined}
+          >
+            {hkd(l.rent_hkd_month)}
+            <span className="ml-1 text-base font-normal text-muted">/month</span>
           </p>
-          <p className="mt-1.5 text-xs text-muted">
-            rent {hkd(l.rent_hkd_month)} · {hkd(cost.move_in_hkd)} to move in
-          </p>
+          {share ? <p className="mt-1.5 text-sm font-medium text-coral-strong">{hkd(share)} each</p> : null}
         </div>
-        <div className="flex flex-none gap-3 text-xs text-muted">
-          {size ? (
-            <span className="flex items-center gap-1" title={ev.saleable_sqft ?? ev.gross_sqft}>
-              <Ruler size={14} weight="fill" className="text-faint" />
-              {size}
-            </span>
-          ) : null}
-          {beds ? (
-            <span className="flex items-center gap-1" title={ev.bedrooms}>
-              <Bed size={14} weight="fill" className="text-faint" />
-              {beds}
-            </span>
-          ) : null}
+        <div className="min-w-0">
+          <p className="text-xs font-medium tracking-wide text-faint uppercase">
+            Commute{campus ? ` to ${campus}` : ""}
+          </p>
+          {commute ? (
+            <>
+              <p
+                className="mt-1 flex items-center gap-2 text-[34px] leading-none font-bold tracking-tight tabular-nums"
+                title={commute.legs.map((x) => `${x.text}: ${Math.round(x.minutes)} min`).join("\n")}
+              >
+                <Train size={26} weight="fill" className="flex-none text-sky" />~{commute.minutes}
+                <span className="text-base font-normal text-muted">min</span>
+              </p>
+              <p className="mt-1.5 truncate text-sm text-muted">
+                {commute.legs.map((x) => x.text).join(" → ")}
+                {commute.precision === "area" ? " (estimated from the district)" : ""}
+              </p>
+            </>
+          ) : (
+            <p className="mt-2 text-sm text-muted">Not estimated: the building could not be placed</p>
+          )}
         </div>
       </div>
 
-      {card.commute ? (
-        <p
-          className="flex items-center gap-2 text-sm text-fg"
-          title={card.commute.legs.map((l) => `${l.text}: ${Math.round(l.minutes)} min`).join("\n")}
-        >
-          <Train size={16} weight="fill" className="flex-none text-sky" />
-          <span className="font-medium tabular-nums">~{card.commute.minutes} min</span>
-          <span className="min-w-0 truncate text-muted">
-            {card.commute.legs.map((l) => l.text).join(" → ")}
-          </span>
-          {card.commute.precision === "area" ? (
-            <span className="flex-none text-xs text-faint" title="The building could not be placed; estimated from the district">
-              (area)
-            </span>
-          ) : null}
-        </p>
-      ) : null}
+      <p className="-mt-1 text-xs text-muted">
+        About {hkd(cost.monthly_hkd)} a month all in, with utilities and fees · {hkd(cost.move_in_hkd)} to move in
+      </p>
 
       {reasons.length ? (
         <ul className="fj-sunset-soft flex flex-col gap-1.5 rounded-xl px-4 py-3 text-sm text-fg">
@@ -156,7 +162,7 @@ export function ListingCard({ card, rank = null, reasons = [] }: Props) {
           rel="noopener noreferrer"
           className="flex items-center gap-1 font-medium text-coral-strong hover:text-coral"
         >
-          View on {l.portal}
+          Photos &amp; details on {portalName(l.portal)}
           <ArrowSquareOut size={13} weight="bold" />
         </a>
         <button onClick={() => setOpen(!open)} className="flex items-center gap-1 text-muted hover:text-fg">
@@ -172,14 +178,18 @@ export function ListingCard({ card, rank = null, reasons = [] }: Props) {
 /** A card still being read: the real card's geometry, so nothing jumps when it arrives. */
 export function ListingCardSkeleton() {
   return (
-    <div className="flex flex-col gap-4 rounded-2xl bg-surface p-5 ring-1 ring-line-faint" aria-hidden>
+    <div className="flex flex-col gap-5 rounded-2xl bg-surface p-5 ring-1 ring-line-faint" aria-hidden>
       <div className="flex flex-col gap-2">
         <span className="fj-skeleton h-4 w-[58%]" />
-        <span className="fj-skeleton h-3.5 w-[30%]" />
+        <span className="fj-skeleton h-3.5 w-[34%]" />
       </div>
-      <div className="flex flex-col gap-2">
-        <span className="fj-skeleton h-7 w-[42%]" />
-        <span className="fj-skeleton h-3 w-[36%]" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {[48, 36].map((w) => (
+          <div key={w} className="flex flex-col gap-2">
+            <span className="fj-skeleton h-3 w-14" />
+            <span className="fj-skeleton h-8" style={{ width: `${w}%` }} />
+          </div>
+        ))}
       </div>
       <div className="flex gap-1.5">
         <span className="fj-skeleton h-6 w-20 rounded-full" />

@@ -11,7 +11,7 @@ const MISSING_LABEL: Record<string, string> = {
 export function ProfileChips({ profile, missing }: { profile: Profile; missing: string[] }) {
   const chips: string[] = [];
   if (profile.budget_hkd_month)
-    chips.push(`≤ ${hkd(profile.budget_hkd_month)}/month${profile.budget_is_total ? " in total" : ""}`);
+    chips.push(`rent ≤ ${hkd(profile.budget_hkd_month)}/month${profile.budget_is_total ? " in total" : ""}`);
   if (profile.flatmates) chips.push(`sharing with ${profile.flatmates}`);
   if (profile.campus) chips.push(profile.max_commute_min ? `≤ ${profile.max_commute_min} min to ${profile.campus}` : `near ${profile.campus}`);
   if (profile.room_only === true) chips.push("room in a shared flat");

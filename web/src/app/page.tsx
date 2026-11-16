@@ -188,7 +188,7 @@ export default function Home() {
                   {run.status === "done" ? "Your shortlist" : cards.length ? "Homes that fit so far" : "Checking listings…"}
                 </p>
                 {cards.map(({ card, rank, reasons }) => (
-                  <ListingCard key={card.listing_id} card={card} rank={rank} reasons={reasons} />
+                  <ListingCard key={card.listing_id} card={card} rank={rank} reasons={reasons} campus={run.profile?.campus} />
                 ))}
                 {Array.from({ length: skeletons }, (_, i) => (
                   <ListingCardSkeleton key={`sk${i}`} />
