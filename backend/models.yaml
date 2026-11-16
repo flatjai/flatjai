@@ -1,0 +1,14 @@
+# Model profiles. The orchestrator never knows which one it talks to.
+models:
+  local:
+    base_url: http://localhost:11434/v1   # Ollama; LM Studio is http://localhost:1234/v1
+    model: qwen3:8b
+    context: 32768
+    max_concurrency: 2
+    json_schema: true
+  tacc:
+    base_url_file: ../deploy/tacc/server-url.txt   # SERVICE_BASE_URL from qwen-public-serve
+    model: Qwen3.8-27B
+    context: 32768
+    max_concurrency: 4
+    json_schema: true

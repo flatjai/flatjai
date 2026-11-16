@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.env
+.DS_Store
+node_modules/
+.next/
+data/raw/
+data/blobs/
+deploy/tacc/server-url.txt
