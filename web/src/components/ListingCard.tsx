@@ -59,7 +59,8 @@ function Items({ items }: { items: CostItem[] }) {
 
 type Props = { card: Card; rank?: number | null; reasons?: string[]; campus?: string | null };
 
-const portalName = (p: string) => p.charAt(0).toUpperCase() + p.slice(1);
+const PORTAL_NAMES: Record<string, string> = { centaline: "Centaline", uhomes: "uhomes", amber: "Amber" };
+const portalName = (p: string) => PORTAL_NAMES[p] ?? p.charAt(0).toUpperCase() + p.slice(1);
 
 export function ListingCard({ card, rank = null, reasons = [], campus = null }: Props) {
   const { listing: l, cost, commute } = card;
@@ -67,6 +68,12 @@ export function ListingCard({ card, rank = null, reasons = [], campus = null }: 
   const ev = l.evidence;
   const size = l.saleable_sqft ? `${l.saleable_sqft} ft²` : l.gross_sqft ? `${l.gross_sqft} ft² gross` : null;
   const beds = l.bedrooms === null ? null : l.bedrooms === 0 ? "Studio" : `${l.bedrooms} bed`;
+  // what kind of home: a room says what it shares; a lease length matters to a student
+  const kind = [
+    l.room_only ? "Room" : null,
+    l.bathroom ? `${l.bathroom} bathroom` : null,
+    l.lease_months ? `${l.lease_months}-month lease` : null,
+  ].filter(Boolean);
   // the rent the budget was checked against: the student's share when a flat is shared
   const budget = card.checks.find((c) => c.name === "budget");
   const share = budget?.value && budget.value !== l.rent_hkd_month ? budget.value : null;
@@ -86,6 +93,7 @@ export function ListingCard({ card, rank = null, reasons = [], campus = null }: 
             {size ? ` · ${size}` : ""}
             {beds ? ` · ${beds}` : ""}
           </p>
+          {kind.length ? <p className="mt-0.5 text-sm text-coral-strong">{kind.join(" · ")}</p> : null}
         </div>
       </header>
 

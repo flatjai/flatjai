@@ -25,6 +25,8 @@ export type Listing = {
   gross_sqft: number | null;
   bedrooms: number | null;
   room_only: boolean;
+  bathroom?: "private" | "shared" | null;
+  lease_months?: number | null;
   furnished: boolean | null;
   estate: string | null;
   address: string | null;

@@ -178,6 +178,7 @@ const SHORT: Record<string, string> = {
   move_in: "free too late",
   duplicate: "duplicate",
   "over budget (listed rent)": "over budget",
+  "sold out": "sold out",
   blocked: "site blocked",
   "gone or unreachable": "already let",
   "not a listing": "not a listing",
