@@ -191,7 +191,7 @@ async def test_replan_when_nothing_fits(store):
     assert "Hang Hau flat" in plan_prompt["messages"][1]["content"]  # told what was tried
     done = events[-1].data
     assert done["shortlist"] == [] and "None of the" in done["summary"]
-    assert done["relaxations"][0].startswith("Raising the budget to HK$13,400")
+    assert done["relaxations"][0].startswith("Raising the budget to about HK$13,400")
 
 
 async def test_enough_homes_skips_the_reflect_call(store):

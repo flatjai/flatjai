@@ -10,10 +10,12 @@ import asyncio
 import logging
 from itertools import zip_longest
 
+from ..schemas import Profile
 from ..tools.fetch import FetchError
 from ..tools.portals import readable_listing_portals
 from ..tools.search import SearchError, SearchResult, expand_list
 from .context import RunContext
+from .match import promise, quick_reject
 from .state import RunState, Stage
 
 log = logging.getLogger(__name__)
@@ -41,7 +43,19 @@ async def search_stage(ctx: RunContext, state: RunState) -> Stage:
         for r in row:
             if r is not None and r.url not in known:
                 new.setdefault(r.url, r)
-    state.candidates += list(new.values())
+    # list-page pre-filter: skip what surely cannot fit before spending a fetch and a model call on it
+    profile = Profile.model_validate(state.profile)
+    keep: list[SearchResult] = []
+    for r in new.values():
+        if reason := quick_reject(r.preview, profile):
+            state.skip(f"{reason} (list page)")
+            state.prefiltered += 1
+            if reason == "over budget" and r.preview and r.preview.rent_hkd:
+                state.card_rents.append(r.preview.rent_hkd)
+        else:
+            keep.append(r)
+    keep.sort(key=lambda r: promise(r.preview, profile))  # stable: area interleaving is kept within groups
+    state.candidates += keep
     state.found += len(new)
     state.queries_tried += state.planned
     await ctx.bus.emit("progress", **state.counters(), new_candidates=len(new))

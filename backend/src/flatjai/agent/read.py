@@ -16,9 +16,10 @@ from ..tools.cost import cost
 from ..tools.extract import EXTRACTOR_VERSION, NotAListing, extract_listing
 from ..tools.fetch import FetchBlocked, FetchError, Page
 from ..tools.portals import portal_for
+from ..tools.preview import preview_from_page
 from ..tools.search import SearchResult
 from .context import RunContext
-from .match import hard_checks
+from .match import hard_checks, quick_reject
 from .state import Match, RunState, Stage
 from .verify import Unsupported, verify_listing
 
@@ -30,12 +31,16 @@ async def read_stage(ctx: RunContext, state: RunState) -> Stage:
     room = min(ctx.budget.reads_per_round, ctx.budget.max_fetches - state.fetches)
     batch, state.candidates = state.candidates[:room], state.candidates[room:]
     state.fetches += len(batch)
+    by_url = {r.url: r for r in batch}
     tasks = {asyncio.create_task(_tagged(ctx, r, profile)): r for r in batch}
     await ctx.bus.emit("progress", **state.counters(), in_flight=len(tasks))
     try:
         for next_done in asyncio.as_completed(tasks):
             url, match, reason = await next_done
             state.read_urls.append(url)
+            preview = by_url[url].preview
+            if reason.startswith("over budget") and preview and preview.rent_hkd:
+                state.card_rents.append(preview.rent_hkd)
             if match is None:
                 state.skip(reason)
             else:
@@ -73,6 +78,12 @@ async def read_one(ctx: RunContext, result: SearchResult, profile: Profile) -> t
     except FetchError as e:
         log.info("skip: %s", e)
         return None, "gone or unreachable"
+
+    # a labelled rent already over budget: skip the model call (about 25 s on a laptop)
+    if page_preview := preview_from_page(page.text):
+        result.preview = page_preview  # kept so the rent can feed budget suggestions
+    if reason := quick_reject(page_preview, profile):
+        return None, f"{reason} (listed rent)"
 
     model = ctx.tools.model.profile.model
     row = await ctx.store.extraction(page.page_hash, EXTRACTOR_VERSION, model)

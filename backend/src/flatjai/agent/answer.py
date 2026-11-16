@@ -179,6 +179,12 @@ async def _ranked(
 def no_fit_summary(state: RunState) -> str:
     read, found = len(state.read_urls), len(state.read_urls) + len(state.candidates)
     stopped = any("budget" in n for n in state.notes)
+    early = state.prefiltered
+    if read == 0 and early:
+        return (
+            f"FlatJai found {found + early} homes, but going by their listed rents and areas, none fits "
+            "your budget and commute. Here is what would change that."
+        )
     if read == 0:
         if stopped:
             return f"FlatJai ran out of its budget before reading any of the {found} homes found. Try again."
@@ -187,6 +193,11 @@ def no_fit_summary(state: RunState) -> str:
         return (
             f"FlatJai stopped after reading {read} of the {found} homes found, and none of those meets "
             "all your hard limits yet. Running the search again continues faster, as pages already read are cached."
+        )
+    if early:
+        return (
+            f"None of the {found + early} homes FlatJai found meets all your limits: {early} were ruled out "
+            f"by their listed rent or area, and the {read} it read in full did not fit either."
         )
     return f"None of the {read} homes FlatJai read meets all your hard limits."
 

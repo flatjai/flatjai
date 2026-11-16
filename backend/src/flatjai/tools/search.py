@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from ..tracing import span
 from .portals import Portal, portal_for
+from .preview import ListingPreview, preview_from_card
 
 
 class SearchResult(BaseModel):
@@ -21,6 +22,7 @@ class SearchResult(BaseModel):
     snippet: str = ""
     portal: str
     kind: Literal["listing", "list"]
+    preview: ListingPreview | None = None  # what the list page said about it (unverified)
 
 
 class SearchError(Exception):
@@ -77,4 +79,9 @@ class _PageSource(Protocol):
 async def expand_list(fetcher: _PageSource, url: str) -> list[SearchResult]:
     """Fetch a portal list page and return the single-listing links on it."""
     page = await fetcher.fetch(url)
-    return [r for r in portal_results([{"url": u} for u in page.links]) if r.kind == "listing"]
+    texts = getattr(page, "link_text", {}) or {}
+    results = [r for r in portal_results([{"url": u} for u in page.links]) if r.kind == "listing"]
+    for r in results:
+        if card := texts.get(r.url):
+            r.preview = preview_from_card(card)
+    return results

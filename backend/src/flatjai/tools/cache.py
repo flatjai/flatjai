@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 from ..storage.blobs import BlobStore
 from ..storage.store import Store
 from ..tracing import span
-from .clean import page_links
+from .clean import link_texts, page_links
 from .fetch import Fetcher, Page
 from .portals import Portal
 from .search import Searcher, SearchError, SearchResult
@@ -40,6 +40,7 @@ class CachedFetcher:
                     fetched_at=row.fetched_at,
                     http_status=row.http_status,
                     links=page_links(html, row.final_url),
+                    link_text=link_texts(html, row.final_url),
                 )
         page = await self.fetcher.fetch(url)
         await self.store.put_page(

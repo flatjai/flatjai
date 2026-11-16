@@ -9,7 +9,8 @@ import re
 from datetime import timedelta
 
 from ..schemas import Listing, Profile
-from ..tools.cost import Cost
+from ..tools.cost import UTILITIES_HKD_MONTH, Cost
+from ..tools.preview import ListingPreview
 from .plan import candidate_areas
 from .state import Check, Match
 
@@ -127,8 +128,9 @@ def mark_duplicates(matches: list[Match]) -> int:
     return marked
 
 
-def relaxations(matches: list[Match], profile: Profile) -> list[str]:
-    """Concrete, computed suggestions when too few homes fit: 'raising the budget to X adds N homes'."""
+def relaxations(matches: list[Match], profile: Profile, card_rents: list[int] | None = None) -> list[str]:
+    """Concrete, computed suggestions when too few homes fit: 'raising the budget to X adds N homes'.
+    Read listings give exact figures; list-page rents of skipped listings give an "about" figure."""
     out: list[str] = []
     if profile.budget_hkd_month is not None:
         needed = sorted(
@@ -142,6 +144,8 @@ def relaxations(matches: list[Match], profile: Profile) -> list[str]:
         for target in sorted({needed[0], needed[min(2, len(needed) - 1)]} if needed else set()):
             adds = sum(n <= target for n in needed)
             out.append(f"Raising the budget to HK${_round_up(target):,} a month adds {adds} home(s).")
+    if not out and card_rents and profile.budget_hkd_month:
+        out += _card_relaxations(card_rents, profile)
     if profile.room_only:
         flats = [m for m in matches if not m.listing.get("room_only") and m.duplicate_of is None]
         if flats and not any(m.fits for m in matches):
@@ -153,5 +157,46 @@ def relaxations(matches: list[Match], profile: Profile) -> list[str]:
     return out
 
 
+def _card_relaxations(card_rents: list[int], profile: Profile) -> list[str]:
+    """From list-page rents (unverified, so "about"): the monthly figure the budget is compared with,
+    rent plus estimated utilities, split between flatmates unless the budget is a total."""
+    split = 1 if profile.budget_is_total else people(profile)
+    needed = sorted(round((rent + UTILITIES_HKD_MONTH) / split) for rent in card_rents)
+    budget = profile.budget_hkd_month or 0
+    reachable = [n for n in needed if n <= 1.5 * budget]
+    if not reachable:
+        return [f"The homes found are listed from about HK${_round_up(needed[0]):,} a month for you."]
+    target = reachable[min(2, len(reachable) - 1)]
+    adds = sum(n <= target for n in needed)
+    return [f"Raising the budget to about HK${_round_up(target):,} a month adds about {adds} home(s)."]
+
+
 def _round_up(n: int, step: int = 100) -> int:
     return -(-n // step) * step
+
+
+def quick_reject(preview: ListingPreview | None, profile: Profile) -> str | None:
+    """Skip a listing from its list-page card alone, only when it surely fails: the rent by itself
+    is over the budget (rent is a floor on the monthly cost), or the card names a district out of
+    reach under a commute limit. Unknowns never reject. Returns the reason, or None to read it."""
+    if preview is None:
+        return None
+    if preview.rent_hkd and profile.budget_hkd_month:
+        rent_for_you = preview.rent_hkd if profile.budget_is_total else preview.rent_hkd / people(profile)
+        if rent_for_you > profile.budget_hkd_month:
+            return "over budget"
+    areas = candidate_areas(profile)
+    if preview.district and profile.max_commute_min and areas:
+        if not any(
+            a.lower() in preview.district.lower() or preview.district.lower() in a.lower() for a in areas
+        ):
+            return "too far"
+    return None
+
+
+def promise(preview: ListingPreview | None, profile: Profile) -> int:
+    """Read order: listings whose card shows a rent within budget first, unknown ones after."""
+    if preview and preview.rent_hkd and profile.budget_hkd_month:
+        return 0
+    return 1
+

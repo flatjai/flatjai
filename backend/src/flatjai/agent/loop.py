@@ -75,7 +75,9 @@ async def plan_stage(ctx: RunContext, state: RunState) -> Stage:
 async def match_stage(ctx: RunContext, state: RunState) -> Stage:
     duplicates = mark_duplicates(state.matches)
     profile = Profile.model_validate(state.profile)
-    state.relaxations = relaxations(state.matches, profile) if len(state.fits()) < ctx.budget.enough else []
+    state.relaxations = (
+        relaxations(state.matches, profile, state.card_rents) if len(state.fits()) < ctx.budget.enough else []
+    )
     await ctx.bus.emit("progress", **state.counters(), duplicates=duplicates)
     return "reflect"
 

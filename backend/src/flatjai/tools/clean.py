@@ -44,3 +44,18 @@ def page_links(html: str, base_url: str) -> list[str]:
         if url.startswith(("http://", "https://")):
             seen.setdefault(url, None)
     return list(seen)
+
+
+def link_texts(html: str, base_url: str) -> dict[str, str]:
+    """Absolute link -> its visible text (styles and icons removed). A portal's list page puts each
+    listing's key facts inside its link, so this is what list-page previews are read from."""
+    tree = LexborHTMLParser(html)
+    for node in tree.css("style, script, svg"):
+        node.decompose()
+    out: dict[str, str] = {}
+    for a in tree.css("a[href]"):
+        url = urljoin(base_url, a.attributes.get("href") or "").split("#")[0]
+        text = " ".join(a.text(separator=" ").split())
+        if url.startswith(("http://", "https://")) and len(text) > len(out.get(url, "")):
+            out[url] = text
+    return out

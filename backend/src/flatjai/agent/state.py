@@ -63,6 +63,8 @@ class RunState(BaseModel):
     fetches: int = 0
     queries: int = 0
     found: int = 0  # candidate listings found by all searches so far
+    prefiltered: int = 0  # skipped from their list-page card alone (surely over budget or too far)
+    card_rents: list[int] = Field(default_factory=list)  # list-page rents of those skipped as over budget
     relaxations: list[str] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)  # budget stops, resumes: shown in the answer
 
@@ -76,6 +78,7 @@ class RunState(BaseModel):
         return {
             "queries": self.queries,
             "candidates": self.found,
+            "prefiltered": self.prefiltered,
             "pages": len(self.read_urls),
             "cards": len(self.fits()),
         }

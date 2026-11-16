@@ -20,7 +20,7 @@ from pydantic import BaseModel
 
 from ..storage.blobs import BlobStore
 from ..tracing import span
-from .clean import html_to_text, page_links, page_title
+from .clean import html_to_text, link_texts, page_links, page_title
 
 BLOCK_STATUSES = {401, 403, 429, 503}
 CHALLENGE_MARKERS = ("challenge page", "just a moment...", "attention required", "cf-chl")
@@ -35,6 +35,7 @@ class Page(BaseModel):
     fetched_at: datetime
     http_status: int
     links: list[str] = []
+    link_text: dict[str, str] = {}  # link -> its visible text (list pages put listing facts there)
 
 
 class FetchError(Exception):
@@ -102,6 +103,7 @@ class Fetcher:
             fetched_at=datetime.now(UTC),
             http_status=resp.status_code,
             links=page_links(resp.text, str(resp.url)),
+            link_text=link_texts(resp.text, str(resp.url)),
         )
 
     async def _polite_get(self, url: str, dom: _Domain) -> httpx.Response:
