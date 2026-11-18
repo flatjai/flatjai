@@ -149,6 +149,8 @@ async def _commute(ctx: RunContext, listing: Listing, profile: Profile) -> tuple
     if place is None:
         return None
     lat, lon, precision = place.lat, place.lon, place.precision
+    if ctx.tools.router is not None and (journey := await ctx.tools.router.journey((lat, lon), key)):
+        return journey, precision  # a real journey: bus 91B, MTR, the walks, with each leg's path
     async with span("commute", "tool", campus=key, home=[lat, lon], precision=precision) as sp:
         journey = commute((lat, lon), key)
         sp.attrs["minutes"] = journey.minutes if journey else None

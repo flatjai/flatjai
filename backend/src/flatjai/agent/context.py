@@ -8,6 +8,7 @@ from ..model_client import ModelClient
 from ..storage.store import Store
 from ..tools.fetch import Page
 from ..tools.geocode import Geocoder
+from ..tools.otp import TransitRouter
 from ..tools.portals import Portal
 from ..tools.search import SearchResult
 from ..tracing import Tracer
@@ -31,6 +32,7 @@ class Toolbox:
     searcher: SearchSource
     fetcher: PageSource
     geocoder: "Geocoder | None" = None  # None: commute is not estimated (the area check stands in)
+    router: "TransitRouter | None" = None  # None: the offline estimate (tools/transit.py)
 
 
 @dataclass
