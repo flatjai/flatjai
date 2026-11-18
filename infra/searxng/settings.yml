@@ -7,3 +7,8 @@ server:
 search:
   safe_search: 0
   formats: [html, json]
+# Yahoo honours "site:" queries. Brave, DuckDuckGo and Google CSE rate-limit or CAPTCHA a busy local
+# instance, after which every site-restricted query returned nothing (seen 2026-11-18).
+engines:
+  - name: yahoo
+    disabled: false
