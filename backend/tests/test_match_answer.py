@@ -308,3 +308,14 @@ def test_a_summary_may_not_give_a_home_another_district():
 def test_rent_at_the_budget_is_said_plainly():
     r = code_reasons(FACTS | {"rent_for_you_hkd": 15000, "rent_hkd": 15000}, Profile(budget_hkd_month=15000))
     assert r[0] == "HK$15,000 rent a month, exactly your budget"
+
+
+def test_ordinals_in_the_summary_follow_the_final_ranking():
+    """Seen live: "the second best is Monterey, the third is Park Central" after code moved Park
+    Central to first (its bedrooms are confirmed)."""
+    from flatjai.agent.answer import check_summary
+
+    p = Profile(budget_hkd_month=30000)
+    assert check_summary("The second best is The Esplanade.", SHORT, p, [1, 2])
+    assert check_summary("The second best is Park Central.", SHORT, p, [1, 2]) is None
+    assert check_summary("The third is Park Central, for its space.", SHORT, p, [2, 1]) is None

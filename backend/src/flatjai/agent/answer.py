@@ -34,6 +34,8 @@ _SUPERLATIVES = [
 _ID_REF = re.compile(r"\(?\b(?:id|home|listing)\s*#?\d+\b\)?", re.I)  # "Mount Pavilia (ID 49)", "Home 109"
 _THIRD_PERSON = re.compile(r"\bstudents?\b|\bthe student\b", re.I)  # "HKUST students should prioritize"
 _PREFERENCE = re.compile(r"prefer|you asked|you wanted|your choice", re.I)
+_ORDINALS = {"second": 1, "next": 1, "third": 2, "fourth": 3, "fifth": 4}
+_ORDINAL = re.compile(r"\b(second|next|third|fourth|fifth)\b", re.I)
 _ALL_IN = re.compile(r"\ball[- ]in\b", re.I)
 _FIRST_PLACE = re.compile(r"(?<!next )(?<!second )(?<!third )(?<!also )\bbest\b", re.I)
 _GENERIC = re.compile(
@@ -252,6 +254,10 @@ def check_summary(summary: str, table: dict[int, dict], profile: Profile, ranked
             continue  # "X is the best fit" when X is not ranked first
         if "budget" in low and _ALL_IN.search(sentence):
             continue
+        if (ordinal := _ORDINAL.search(sentence)) and named:
+            place = _ORDINALS[ordinal.group(1).lower()]
+            if place >= len(ranked) or ranked[place] != named[0]:
+                continue  # "the second best is X" when X is not ranked second
         kept.append(sentence)
     return " ".join(kept) or None
 
