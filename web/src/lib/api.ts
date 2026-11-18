@@ -42,8 +42,19 @@ export type CostItem = { label: string; hkd: number; assumed: boolean };
 export type Cost = { monthly_hkd: number; move_in_hkd: number; monthly_items: CostItem[]; move_in_items: CostItem[] };
 export type Check = { name: string; ok: boolean | null; detail: string; value: number | null };
 
-export type CommuteLeg = { mode: "walk" | "bus" | "mtr"; text: string; minutes: number };
-export type RoutePlace = { name: string; kind: "home" | "station" | "campus"; lat: number; lon: number };
+export type CommuteLeg = {
+  mode: "walk" | "bus" | "minibus" | "mtr" | "tram" | "ferry";
+  text: string;
+  minutes: number;
+  path?: [number, number][]; // the leg's real line, from OpenTripPlanner
+  color?: string | null; // the line's own colour (MTR)
+};
+export type RoutePlace = {
+  name: string;
+  kind: "home" | "station" | "board" | "alight" | "campus";
+  lat: number;
+  lon: number;
+};
 export type Commute = {
   minutes: number;
   legs: CommuteLeg[];

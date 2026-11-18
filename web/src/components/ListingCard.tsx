@@ -6,6 +6,7 @@ import { useState } from "react";
 import type { Card, Check as CheckT, CostItem } from "@/lib/api";
 import { fetchedAgo, hkd } from "@/lib/format";
 
+import { hasRealPath, RouteMap } from "./RouteMap";
 
 const CHECK_LABEL: Record<string, string> = {
   budget: "Budget",
@@ -30,7 +31,11 @@ function Checks({ checks }: { checks: CheckT[] }) {
       {checks.map((c) => {
         const s = CHECK_STYLE[c.ok === true ? "ok" : c.ok === false ? "bad" : "unknown"];
         return (
-          <li key={c.name} title={c.detail} className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${s.cls}`}>
+          <li
+            key={c.name}
+            title={c.detail}
+            className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${s.cls}`}
+          >
             <s.icon size={12} weight="bold" />
             {CHECK_LABEL[c.name] ?? c.name}
           </li>
@@ -139,6 +144,10 @@ export function ListingCard({ card, rank = null, reasons = [], campus = null }: 
         About {hkd(cost.monthly_hkd)} a month all in, with utilities and fees · {hkd(cost.move_in_hkd)} to move in
       </p>
 
+      {commute?.route && hasRealPath(commute.legs) ? (
+        <RouteMap legs={commute.legs} route={commute.route} approximate={commute.precision === "area"} />
+      ) : null}
+
       {reasons.length ? (
         <ul className="fj-sunset-soft flex flex-col gap-1.5 rounded-xl px-4 py-3 text-sm text-fg">
           {reasons.map((r) => (
@@ -169,8 +178,8 @@ export function ListingCard({ card, rank = null, reasons = [], campus = null }: 
       {asking && card.ask ? (
         <div className="fj-rise flex flex-col gap-3 rounded-xl bg-raised p-4">
           <p className="text-xs text-muted">
-            The listing leaves these open. Copy the message and send it to the agent yourself; FlatJai never
-            contacts anyone.
+            The listing leaves these open. Copy the message and send it to the agent yourself; FlatJai never contacts
+            anyone.
           </p>
           <pre className="max-h-56 overflow-auto rounded-lg bg-bg p-3 font-sans text-sm leading-relaxed whitespace-pre-wrap text-fg">
             {card.ask.message}
