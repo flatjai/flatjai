@@ -6,7 +6,6 @@ import { useState } from "react";
 import type { Card, Check as CheckT, CostItem } from "@/lib/api";
 import { fetchedAgo, hkd } from "@/lib/format";
 
-import { MiniMap } from "./MiniMap";
 
 const CHECK_LABEL: Record<string, string> = {
   budget: "Budget",
@@ -139,10 +138,6 @@ export function ListingCard({ card, rank = null, reasons = [], campus = null }: 
       <p className="-mt-1 text-xs text-muted">
         About {hkd(cost.monthly_hkd)} a month all in, with utilities and fees · {hkd(cost.move_in_hkd)} to move in
       </p>
-
-      {commute?.route && commute.route.length >= 2 ? (
-        <MiniMap route={commute.route} approximate={commute.precision === "area"} />
-      ) : null}
 
       {reasons.length ? (
         <ul className="fj-sunset-soft flex flex-col gap-1.5 rounded-xl px-4 py-3 text-sm text-fg">
