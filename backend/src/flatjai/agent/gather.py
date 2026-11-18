@@ -22,14 +22,22 @@ log = logging.getLogger(__name__)
 LIST_PAGES_PER_QUERY = 1
 
 
+def portals_for(profile: Profile) -> list:
+    """Where to look: a room search reads the student-housing sites first; a whole-flat search (a studio,
+    a 2-bedroom flat) skips them, since every home they list is a room it would reject."""
+    portals = readable_listing_portals()
+    if profile.room_only:
+        portals.sort(key=lambda p: not p.rooms)
+    elif profile.room_only is False or profile.bedrooms is not None:
+        portals = [p for p in portals if not p.rooms]
+    return portals
+
+
 async def search_stage(ctx: RunContext, state: RunState) -> Stage:
     known = set(state.read_urls) | {c.url for c in state.candidates}
     per_query: list[list[SearchResult]] = []
     profile = Profile.model_validate(state.profile)
-    portals = readable_listing_portals()
-    if profile.room_only:  # a student who wants a room: student-housing sites first
-        portals.sort(key=lambda p: not p.rooms)
-    for portal in portals:
+    for portal in portals_for(profile):
         if portal.rooms and portal.browse_url and state.round == 1:
             # student-housing sites list their homes on one page: read it every first round
             per_query.append(await _expand(ctx, state, portal.browse_url))

@@ -23,6 +23,24 @@ from .state import Match, RunState, Stage
 _FIELD_NAME = re.compile(r"\b[a-z]+(?:_[a-z]+)+\b", re.I)
 _NUMBER = re.compile(r"(\d[\d,]*(?:\.\d+)?)\s*(%|min|minute|km|m\b|metre|meter|hour|hr|分鐘|公里)?", re.I)
 SMALL_COUNTS = set(range(0, 11))  # "2 bedrooms", "3 homes": fine without a matching fact
+# Superlatives are claims about the whole shortlist; each needs its computed fact (seen live: three
+# homes each "the lowest among all options").
+_SUPERLATIVES = [
+    (re.compile(r"\b(?:lowest|cheapest|smallest)\s+move-?in", re.I), "lowest_move_in_of_these"),
+    (re.compile(r"\b(?:cheapest|lowest|least expensive|most affordable)\b", re.I), "cheapest_of_these"),
+    (re.compile(r"\b(?:shortest|closest|nearest|quickest|fastest)\b", re.I), "shortest_commute_of_these"),
+    (re.compile(r"\b(?:largest|biggest|most space|most spacious|roomiest)\b", re.I), "largest_of_these"),
+]
+_ID_REF = re.compile(r"\(?\b(?:id|home|listing)\s*#?\d+\b\)?", re.I)  # "Mount Pavilia (ID 49)", "Home 109"
+_THIRD_PERSON = re.compile(r"\bstudents?\b|\bthe student\b", re.I)  # "HKUST students should prioritize"
+_PREFERENCE = re.compile(r"prefer|you asked|you wanted|your choice", re.I)
+_ALL_IN = re.compile(r"\ball[- ]in\b", re.I)
+_FIRST_PLACE = re.compile(r"(?<!next )(?<!second )(?<!third )(?<!also )\bbest\b", re.I)
+_GENERIC = re.compile(
+    r"^\s*(?:your\s+)?(?:monthly\s+)?rent is (?:within|under) (?:your\s+)?(?:rent\s+)?budget\.?\s*$"
+    r"|^\s*(?:it\s+)?meets your (?:rent\s+)?budget(?: of HK\$[\d,]+)?\.?\s*$",
+    re.I,
+)  # says nothing the card does not already show
 
 
 class Pick(BaseModel):
@@ -40,11 +58,15 @@ class Shortlist(BaseModel):
 
 SYSTEM = """You present a shortlist of Hong Kong homes to a student, speaking to them as "you".
 All homes given already meet their hard limits. Order them best first for this student, weighing
-their soft preferences and value for money, and give 1-3 short reasons for each.
-Only state facts that appear in the home's data. Write money as HK$ with commas, e.g. HK$9,600.
+their soft preferences, value for money and the commute, and give 1-3 short reasons for each.
+Each card already shows the rent and commute, so a reason should say what sets this home apart from
+the others: more space, a shorter commute, furnished, a lower move-in cost, a district they named.
+Only state facts that appear in the home's data. Call a home the cheapest, closest or largest only
+when its data says cheapest_of_these, shortest_commute_of_these or largest_of_these is true.
+Name homes by their building name, never by id. Write money as HK$ with commas, e.g. HK$9,600.
 The student's budget is a monthly RENT budget: compare it only with rent_for_you_hkd ("your rent" or
-"your share of the rent"), never with the all-in cost. Never write the data's field names. Call a district "preferred" only if
-the student named it.
+"your share of the rent"), never with the all-in cost. Never write the data's field names. Call a
+district "preferred" only when in_district_you_named is true.
 If a preference cannot be checked from the data (e.g. "quiet"), do not claim it.
 The summary is two short sentences to the student. Reply with JSON only."""
 
@@ -68,7 +90,45 @@ def facts(m: Match, profile: Profile) -> dict:
         "available_from": listing.available_from.isoformat() if listing.available_from else None,
         "commute_min_estimate": m.commute["minutes"] if m.commute else None,
         "unknown_checks": sum(c.ok is None for c in m.checks),
+        "in_district_you_named": _in_named_district(listing.district, profile) if profile.districts else None,
     }
+
+
+def placed_first(ids: list[int], table: dict[int, dict]) -> list[int]:
+    """Confirmed limits first, then homes with a known place (district or commute); stable otherwise."""
+
+    def key(i: int) -> tuple[int, int]:
+        f = table[i]
+        unplaced = not f.get("district") and not f.get("commute_min_estimate")
+        return (f.get("unknown_checks", 0), int(unplaced))
+
+    return sorted(ids, key=key)
+
+
+def with_standing(table: dict[int, dict]) -> dict[int, dict]:
+    """Where each home stands among these: the facts behind "cheapest", "closest" and "largest"."""
+    if len(table) < 2:
+        return table
+
+    def best(key: str, pick) -> set[int]:
+        known = {i: f[key] for i, f in table.items() if f.get(key)}
+        if len(known) < 2:
+            return set()
+        top = pick(known.values())
+        return {i for i, v in known.items() if v == top}
+
+    flags = {
+        "cheapest_of_these": best("rent_for_you_hkd", min),
+        "lowest_move_in_of_these": best("move_in_cost_hkd", min),
+        "shortest_commute_of_these": best("commute_min_estimate", min),
+        "largest_of_these": best("saleable_sqft", max),
+    }
+    return {i: f | {name: i in ids for name, ids in flags.items() if ids} for i, f in table.items()}
+
+
+def _in_named_district(district: str | None, profile: Profile) -> bool:
+    d = (district or "").lower()
+    return bool(d) and any(n.lower() in d or d in n.lower() for n in profile.districts)
 
 
 def allowed_numbers(f: dict, profile: Profile, extra: set[int] = frozenset()) -> set[int]:
@@ -109,12 +169,19 @@ def fair_claim(text: str, f: dict, profile: Profile) -> bool:
     preferred district" claim only for a district the student named; and a reason that talks about
     the budget may only use the rent it is compared with, the budget and their difference. Every number can be real and the claim still false: "all-in HK$19,600 is
     under your HK$15,000 budget" (seen live)."""
-    if _FIELD_NAME.search(text):
-        return False  # the model echoed a field name ("Rent_for_you_hkd is HK$9,000")
+    if _FIELD_NAME.search(text) or _ID_REF.search(text):
+        return False  # the model echoed a field name ("Rent_for_you_hkd is HK$9,000") or an id
+    for pattern, flag in _SUPERLATIVES:
+        if pattern.search(text):
+            if not f.get(flag):
+                return False
+            break  # the most specific superlative decides ("lowest move-in" is not "lowest rent")
     if re.search(r"prefer|you asked|you wanted|your choice", text, re.I) and not _named_by_student(
         text, f, profile
     ):
         return False  # "in Tseung Kwan O, one of your preferred districts" when the student named others (seen live)
+    if "budget" in text.lower() and _ALL_IN.search(text):
+        return False  # the budget is a rent budget: "all-in cost under your budget" compares the wrong figure
     if not profile.budget_hkd_month or "budget" not in text.lower():
         return True
     budget, rent = profile.budget_hkd_month, f["rent_for_you_hkd"]
@@ -133,12 +200,72 @@ def _named_by_student(text: str, f: dict, profile: Profile) -> bool:
     return any(p.lower() in text.lower() for p in profile.soft_preferences)
 
 
+def _aliases(f: dict) -> list[str]:
+    """How a summary may name a home: 'Tseung Kwan O · Park Central・Phase 1・Tower 9' -> the full title,
+    'Park Central・Phase 1・Tower 9', 'Park Central'."""
+    title = f.get("title") or ""
+    names = {title, title.split("·")[-1]}
+    names |= {n.split("・")[0].split(",")[0] for n in list(names)}
+    return sorted({n.strip().lower() for n in names if len(n.strip()) >= 5}, key=len, reverse=True)
+
+
+def _full_name(f: dict) -> str:
+    """'Sheung Wan · Hollywood Road・Tower 2' -> 'sheung wan · hollywood road'."""
+    return (f.get("title") or "").split("・")[0].strip().lower()
+
+
+def check_summary(summary: str, table: dict[int, dict], profile: Profile, ranked: list[int]) -> str | None:
+    """The summary's sentences get the reasons' checks, one by one; a sentence that fails is left
+    out. A sentence may only name homes on the shortlist, call one "best" only if it is ranked first,
+    and call homes "preferred" only if each is in a district the student named (seen live: Tuen Mun
+    and Tsuen Wan homes "both in your preferred district" for a student who named Hang Hau)."""
+    table = with_standing(table)
+    everything = set().union(
+        *(allowed_numbers(f, profile, {len(table), len(ranked)}) for f in table.values())
+    )
+    kept = []
+    for sentence in re.split(r"(?<=[.!?])\s+", summary.strip()):
+        if (
+            not sentence
+            or _THIRD_PERSON.search(sentence)
+            or _FIELD_NAME.search(sentence)
+            or _ID_REF.search(sentence)
+        ):
+            continue
+        if not supported(sentence, everything):
+            continue
+        low = sentence.lower()
+        named = [i for i, f in table.items() if any(a in low for a in _aliases(f))]
+        named.sort(key=lambda i: min(low.find(a) for a in _aliases(table[i]) if a in low))
+        if any(i not in ranked for i in named):
+            continue
+        if "·" in sentence and not any(_full_name(f) in low for f in table.values()):
+            continue  # "Kennedy Town · Hollywood Road" for the Sheung Wan home: a district swapped in
+        if _PREFERENCE.search(sentence) and not (
+            named and all(_in_named_district(table[i].get("district"), profile) for i in named)
+        ):
+            continue
+        superlative = next((flag for pattern, flag in _SUPERLATIVES if pattern.search(sentence)), None)
+        if superlative and not (named and all(table[i].get(superlative) for i in named[:1])):
+            continue
+        if _FIRST_PLACE.search(sentence) and named and ranked[0] not in named:
+            continue  # "X is the best fit" when X is not ranked first
+        if "budget" in low and _ALL_IN.search(sentence):
+            continue
+        kept.append(sentence)
+    return " ".join(kept) or None
+
+
 def code_reasons(f: dict, profile: Profile) -> list[str]:
     reasons = []
     rent = f["rent_for_you_hkd"]
     who = " in total" if profile.budget_is_total else " for you" if rent != f["rent_hkd"] else ""
     if profile.budget_hkd_month:
-        reasons.append(f"HK${rent:,} rent a month{who}, HK${profile.budget_hkd_month - rent:,} under budget")
+        spare = profile.budget_hkd_month - rent
+        reasons.append(
+            f"HK${rent:,} rent a month{who}, "
+            + (f"HK${spare:,} under budget" if spare else "exactly your budget")
+        )
     else:
         reasons.append(f"HK${rent:,} rent a month{who}")
     if f["commute_min_estimate"]:
@@ -179,6 +306,7 @@ async def _ranked(
         f"{len(table)} home(s) meet your limits. The best value is {cheapest['title']} at "
         f"HK${budgeted(cheapest, profile):,} rent a month {'in total' if profile.budget_is_total else 'for you'}."
     )
+    table = with_standing(table)
     async with span("explain+check", "stage", homes=len(table)) as sp:
         try:
             async with asyncio.timeout(ctx.answer_time_left()):
@@ -199,19 +327,25 @@ async def _ranked(
             ok = [
                 r
                 for r in p.reasons
-                if supported(r, allowed_numbers(table[p.id], profile)) and fair_claim(r, table[p.id], profile)
+                if supported(r, allowed_numbers(table[p.id], profile))
+                and fair_claim(r, table[p.id], profile)
+                and not _GENERIC.match(r)
             ]
             dropped += len(p.reasons) - len(ok)
             picks.append((p.id, ok or code_reasons(table[p.id], profile)))
         # homes the model left out still appear, after its picks, ordered by value
         picks += [(i, code_reasons(table[i], profile)) for i in by_value if i not in {p for p, _ in picks}]
-        # homes whose hard limits are all confirmed come before homes with an unknown ("?") limit;
-        # the model's order is kept within each group (a far home with an unknown commute ranked #1: seen live)
-        picks.sort(key=lambda pick: table[pick[0]]["unknown_checks"])
-        everything = set().union(*(allowed_numbers(f, profile, {len(table)}) for f in table.values()))
-        summary_ok = supported(out.summary, everything)
-        sp.attrs |= {"unsupported_claims": dropped + (not summary_ok), "summary_ok": summary_ok}
-        return picks[:size], out.summary if summary_ok and out.summary.strip() else fallback_summary
+        # homes whose hard limits are all confirmed come first, then homes FlatJai could place; the model's
+        # order is kept within each group (a far home with an unknown commute ranked #1, and a home with
+        # no district or commute ranked #1 for a student who named Hang Hau: both seen live)
+        order = placed_first([i for i, _ in picks], table)
+        picks.sort(key=lambda pick: order.index(pick[0]))
+        picks = picks[:size]
+        summary = check_summary(out.summary, table, profile, [i for i, _ in picks])
+        sp.attrs |= {"unsupported_claims": dropped, "summary_ok": summary == out.summary.strip()}
+        if summary and len(summary) < len(out.summary.strip()):
+            sp.attrs["summary_trimmed_from"] = out.summary
+        return picks, summary or fallback_summary
 
 
 def no_fit_summary(state: RunState) -> str:

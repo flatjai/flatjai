@@ -51,6 +51,13 @@ def hard_checks(listing: Listing, cost: Cost, profile: Profile) -> list[Check]:
             checks.append(Check(name="room", ok=None, detail="room or whole flat not stated"))
         else:
             checks.append(Check(name="room", ok=False, detail="whole flat, not a room"))
+    elif (
+        listing.room_only
+        and (profile.room_only is False or profile.bedrooms)
+        and not (profile.bedrooms == 0 and _says_studio(listing))
+    ):
+        # a whole flat was asked for ("2-bedroom flat to share"): a single room cannot be it (seen live)
+        checks.append(Check(name="room", ok=False, detail="a room, not a whole flat"))
     if profile.bedrooms:
         if listing.bedrooms is None:
             checks.append(Check(name="bedrooms", ok=None, detail="bedrooms not stated"))
@@ -110,6 +117,12 @@ def same_home(a: Listing, b: Listing) -> bool:
     ):
         return False
     return abs(a.rent_hkd_month - b.rent_hkd_month) <= 0.05 * a.rent_hkd_month
+
+
+def _says_studio(listing: Listing) -> bool:
+    """A self-contained studio offered in a student residence suits a student who asked for a studio."""
+    text = " ".join([listing.title, *listing.evidence.values()]).lower()
+    return "studio" in text or "開放式" in text
 
 
 def _rooms_site(listing: Listing) -> bool:

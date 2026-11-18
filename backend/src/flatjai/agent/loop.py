@@ -26,7 +26,7 @@ from .plan import fallback_queries, new_queries, plan_search, within_reach
 from .read import read_stage
 from .reflect import reflect_stage
 from .state import RunState, Stage
-from .understand import decide_clarify, parse_brief
+from .understand import decide_clarify, parse_brief, tidy_suggestions
 
 log = logging.getLogger(__name__)
 
@@ -49,7 +49,10 @@ async def understand_stage(ctx: RunContext, state: RunState) -> Stage:
             )
             await ctx.store.add_message(ctx.session_id, "assistant", decision.question)
             await ctx.bus.emit(
-                "clarify", question=decision.question, suggestions=decision.suggestions[:4], missing=not_asked
+                "clarify",
+                question=decision.question,
+                suggestions=tidy_suggestions(decision.suggestions)[:4],
+                missing=not_asked,
             )
             return "finished"
     return "plan"

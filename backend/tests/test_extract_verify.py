@@ -94,3 +94,53 @@ def test_evidence_for_empty_fields_is_removed():
         listing(gross_sqft=None, evidence=DRAFT_JSON["evidence"] | {"gross_sqft": "S.A. 301"}), TEXT
     )
     assert "gross_sqft" not in v.listing.evidence
+
+
+def test_a_bedroom_count_is_not_a_room_for_rent():
+    """Centaline prints "Room 1 Rm(s)" for the bedroom count; the model read it as a room to rent
+    (seen live: a 2-bedroom flat in Tseung Kwan O shortlisted as a room)."""
+    v = verify_listing(
+        listing(
+            room_only=True, bedrooms=None, evidence=DRAFT_JSON["evidence"] | {"room_only": "Room 1 Rm(s)"}
+        ),
+        TEXT,
+    )
+    assert v.listing.room_only is False and "room_only" in v.dropped
+    assert v.listing.bedrooms == 1  # the span it cited is the bedroom count
+
+
+def test_district_comes_from_the_title_when_the_model_left_it_empty():
+    v = verify_listing(listing(title="Hang Hau · TEST COURT・Block 1", district=None), TEXT)
+    assert v.listing.district == "Hang Hau"
+    v = verify_listing(listing(title="Test Court, Block 1", district=None), TEXT)
+    assert v.listing.district is None  # nothing to go on: stays unknown
+
+
+def test_district_comes_from_a_student_site_address_line():
+    """uhomes prints "392-394, Pai Tau Estate, Sha Tin, Hong Kong(China)"; the model left the district
+    empty, so the home could not be placed and still ranked first (seen live)."""
+    text = (
+        TEXT + "\n392-394, Pai Tau Estate, Sha Tin, Hong Kong(China)\n123 Bulkeley Street, Hong Kong(China)\n"
+    )
+    v = verify_listing(listing(title="Qingyangju Phase 1", district=None), text)
+    assert v.listing.district == "Sha Tin"
+    name_only = TEXT + "\nThe Grand Blossom whole rental, Hong Kong(China)\n"
+    assert (
+        verify_listing(listing(title="The Grand Blossom", district=None), name_only).listing.district is None
+    )
+
+
+def test_only_centaline_titles_lead_with_the_district():
+    """'Kiu Fung Mansion · Jordan' (Amber) and 'HEREIN Student · Yau Ma Tei' lead with a name, not a district."""
+    amber = listing(title="Hang Hau · Kiu Fung Mansion", district=None).model_copy(update={"portal": "amber"})
+    v = verify_listing(amber, TEXT)
+    assert v.listing.district is None
+
+
+def test_a_studio_is_a_whole_unit_not_a_room():
+    text = TEXT + "\nStudio\n"
+    v = verify_listing(
+        listing(room_only=True, bedrooms=None, evidence=DRAFT_JSON["evidence"] | {"room_only": "Studio"}),
+        text,
+    )
+    assert v.listing.room_only is False and v.listing.bedrooms == 0

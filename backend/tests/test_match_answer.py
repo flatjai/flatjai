@@ -182,3 +182,129 @@ def test_preference_claims_must_match_what_the_student_named():
         "It's in Diamond Hill, one of your preferred areas.", FACTS | {"district": "Diamond Hill"}, p
     )
     assert fair_claim("A quiet estate, as you preferred.", tko, p)
+
+
+def test_a_room_never_passes_a_whole_flat_brief():
+    """A 2-bedroom flat to share shortlisted single rooms (seen live)."""
+    assert checks(Profile(bedrooms=2, flatmates=1), room_only=True)["room"].ok is False
+    assert checks(Profile(room_only=False), room_only=True)["room"].ok is False
+    assert "room" not in checks(Profile(bedrooms=2))  # a whole flat: nothing to say
+
+
+def test_geocode_name_drops_city_filler():
+    from flatjai.agent.read import geocode_name
+
+    assert geocode_name(listing(title="Whampoa Garden, HongKong in Hong Kong")) == "Whampoa Garden"
+    assert (
+        geocode_name(listing(title="Kiu Fung Mansion · Jordan, Hongkong in Hong Kong")) == "Kiu Fung Mansion"
+    )
+    assert (
+        geocode_name(listing(title="Hang Hau · RESIDENCE OASIS・Tower 2", district="Hang Hau"))
+        == "RESIDENCE OASIS"
+    )
+
+
+SHORT = {
+    1: FACTS
+    | {
+        "id": 1,
+        "title": "Tseung Kwan O · Park Central・Phase 1・Tower 9",
+        "district": "Tseung Kwan O",
+        "rent_for_you_hkd": 10750,
+        "commute_min_estimate": 16,
+        "saleable_sqft": 500,
+    },
+    2: FACTS
+    | {
+        "id": 2,
+        "title": "Tuen Mun South · The Esplanade",
+        "district": "Tuen Mun",
+        "rent_for_you_hkd": 9800,
+        "commute_min_estimate": 71,
+        "saleable_sqft": 400,
+    },
+}
+
+
+def test_summary_sentences_are_checked_like_reasons():
+    from flatjai.agent.answer import check_summary
+
+    p = Profile(budget_hkd_month=30000, budget_is_total=True, districts=["Hang Hau"])
+    ranked = [1, 2]
+    # seen live: Tuen Mun called "your preferred district" when the student named Hang Hau
+    s = "The best options are The Esplanade and Park Central, both in your preferred district. Both are under budget."
+    assert check_summary(s, SHORT, p, ranked) == "Both are under budget."
+    # ids, field names and third person are dropped; a true sentence stays
+    assert check_summary("Mount Pavilia (ID 49) is the best fit.", SHORT, p, ranked) is None
+    assert check_summary("HKUST students should prioritize this option.", SHORT, p, ranked) is None
+    assert check_summary("Park Central has the shortest commute.", SHORT, p, ranked) == (
+        "Park Central has the shortest commute."
+    )
+    # "best" must include the home ranked first; "next best" is not a claim to first place
+    assert check_summary("The Esplanade and Park Central are best for you.", SHORT, p, ranked)
+    assert check_summary("The Esplanade is the best fit.", SHORT, p, ranked) is None
+    assert check_summary("The Esplanade is the next best choice.", SHORT, p, ranked)
+    # the budget is a rent budget: all-in costs are never compared with it (seen live)
+    assert check_summary("All have monthly all-in costs under your budget.", SHORT, p, ranked) is None
+
+
+def test_superlatives_must_be_true_of_the_home():
+    from flatjai.agent.answer import fair_claim, with_standing
+
+    table = with_standing(SHORT)
+    p = Profile(budget_hkd_month=30000)
+    # seen live: three homes each "the lowest among all options"
+    assert not fair_claim("Its rent is the lowest among all options.", table[1], p)
+    assert fair_claim("Its rent is the lowest among all options.", table[2], p)
+    assert fair_claim("The shortest commute of these homes.", table[1], p)
+    assert not fair_claim("The closest to campus.", table[2], p)
+    assert not fair_claim("The most space for the money.", table[2], p)
+
+
+def test_homes_that_cannot_be_placed_come_after_placed_ones():
+    from flatjai.agent.answer import placed_first
+
+    table = {
+        1: FACTS | {"id": 1, "district": None, "commute_min_estimate": None, "unknown_checks": 0},
+        2: FACTS | {"id": 2, "district": "Tseung Kwan O", "commute_min_estimate": 22, "unknown_checks": 0},
+        3: FACTS | {"id": 3, "district": "Sai Sha", "commute_min_estimate": None, "unknown_checks": 1},
+    }
+    assert placed_first([1, 2, 3], table) == [2, 1, 3]  # an unconfirmed hard limit still goes last
+
+
+def test_a_residence_studio_suits_a_studio_brief():
+    studio = Profile(room_only=False, bedrooms=0)
+    assert "room" not in checks(studio, room_only=True, title="Starvia Studio", portal="amber")
+    assert (
+        checks(studio, room_only=True, title="Whampoa Garden", evidence={"room_only": "Private Room"})[
+            "room"
+        ].ok
+        is False
+    )
+
+
+def test_a_whole_flat_search_skips_room_only_sites():
+    """A studio search spent its whole time reading student rooms it then had to reject (seen live)."""
+    from flatjai.agent.gather import portals_for
+
+    rooms = {p.name for p in portals_for(Profile(room_only=True)) if p.rooms}
+    assert rooms  # a room search reads the student-housing sites, first
+    assert portals_for(Profile(room_only=True))[0].rooms
+    assert not any(p.rooms for p in portals_for(Profile(room_only=False, bedrooms=0)))
+    assert not any(p.rooms for p in portals_for(Profile(bedrooms=2)))
+    assert any(p.rooms for p in portals_for(Profile()))  # nothing said: every site
+
+
+def test_a_summary_may_not_give_a_home_another_district():
+    from flatjai.agent.answer import check_summary
+
+    p = Profile(budget_hkd_month=30000)
+    # seen live: "Sheung Wan · Hollywood Road" written as "Kennedy Town · Hollywood Road"
+    table = {1: SHORT[1] | {"title": "Sheung Wan · Hollywood Road"}, 2: SHORT[2]}
+    assert check_summary("Kennedy Town · Hollywood Road is the cheapest.", table, p, [2, 1]) is None
+    assert check_summary("Sheung Wan · Hollywood Road has the shortest commute.", table, p, [1, 2])
+
+
+def test_rent_at_the_budget_is_said_plainly():
+    r = code_reasons(FACTS | {"rent_for_you_hkd": 15000, "rent_hkd": 15000}, Profile(budget_hkd_month=15000))
+    assert r[0] == "HK$15,000 rent a month, exactly your budget"

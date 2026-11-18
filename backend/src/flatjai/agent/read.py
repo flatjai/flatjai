@@ -8,6 +8,7 @@ stops early once the shortlist is full; unread candidates go back in the queue.
 
 import asyncio
 import logging
+import re
 
 import openai
 
@@ -111,6 +112,11 @@ async def read_one(ctx: RunContext, result: SearchResult, profile: Profile) -> t
 
     listing = Listing.model_validate(row.data)
     listing.title = tidy_title(listing.title)  # extractions cached before a cleaning rule get it too
+    try:  # and today's grounding rules (code only, no model call): e.g. "Room 2 Rm(s)" is not a room
+        listing = verify_listing(listing, page.text).listing
+    except Unsupported:
+        return None, "unsupported rent"
+    listing_data = listing.model_dump(mode="json")
     c = cost(listing)
     checks = hard_checks(listing, c, profile)
     trip = await _commute(ctx, listing, profile)
@@ -119,7 +125,7 @@ async def read_one(ctx: RunContext, result: SearchResult, profile: Profile) -> t
         checks = with_commute(checks, journey.minutes, journey.summary(), profile, precision)
     match = Match(
         listing_id=row.id,
-        listing=row.data,
+        listing=listing_data,
         cost=c.model_dump(mode="json"),
         checks=checks,
         fetched_at=page.fetched_at.isoformat(),
@@ -153,11 +159,21 @@ def geocode_name(listing: Listing) -> str | None:
     """The estate or building to look up: the estate, else the title part that is not the district
     ('Hang Hau · RESIDENCE OASIS・Tower 2' -> 'RESIDENCE OASIS'; 'Hang Hau Metro City' stays whole)."""
     if listing.estate:
-        return listing.estate
+        return _without_city(listing.estate)
     district = (listing.district or "").lower()
-    parts = [p.split("・")[0].strip() for p in listing.title.split("·")]
+    parts = [_without_city(p.split("・")[0]) for p in listing.title.split("·")]
     named = [p for p in parts if p and p.lower() != district]
     return named[0] if named else (parts[0] or None)
+
+
+# Student sites append the city: "Whampoa Garden, HongKong in Hong Kong". ALS needs every word of a
+# name to match, so the filler made Whampoa Garden (Hung Hom) fall back to "Hong Kong" (seen live).
+_CITY_FILLER = re.compile(r"(?:,?\s*(?:in\s+)?hong\s*kong(?:\s*\(china\))?)+\s*$", re.I)
+
+
+def _without_city(name: str) -> str:
+    name = _CITY_FILLER.sub("", name.strip())
+    return name.split(",")[0].strip()
 
 
 async def _extract(

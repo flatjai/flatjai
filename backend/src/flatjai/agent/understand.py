@@ -22,6 +22,7 @@ How to read common phrases:
 - "9k", "$9,000", "九千" -> budget_hkd_month 9000 (HK$ per month).
 - "under 40 min to HKUST", "within 40 minutes of campus" -> campus "HKUST", max_commute_min 40.
 - "own room", "a room", "share a flat" -> room_only true. "a 2-bedroom flat", "whole flat" -> room_only false.
+- "studio" -> a whole small flat: room_only false, bedrooms 0.
 - "with a friend", "with my partner" -> flatmates 1 (people sharing besides the student).
 - "from January", "moving in Jan" -> move_in = the next 1 January after today.
 - "quiet", "near MTR", "with a gym", "pet friendly" -> soft_preferences.
@@ -96,11 +97,45 @@ def ground_profile(profile: Profile, text: str) -> Profile:
         update["budget_hkd_month"] = money.pop()
         if _TOTAL.search(text):
             update["budget_is_total"] = True
+    if profile.campus is None and len(named := campuses_named(text)) == 1:
+        update["campus"] = named.pop()  # the model dropped a campus the student wrote
+    if _STUDIO.search(text) and not _ROOM.search(text):
+        # a studio is a whole small flat with no separate bedroom, not a room in a shared flat
+        update |= {"room_only": False, "bedrooms": 0}
     if profile.max_commute_min is None and len(minutes) == 1:
         update["max_commute_min"] = minutes.pop()
     elif profile.max_commute_min is not None and minutes and profile.max_commute_min not in minutes:
         update["max_commute_min"] = None
     return profile.model_copy(update=update) if update else profile
+
+
+# Campus names as students write them; the Chinese University is matched before "University of Hong Kong"
+_CAMPUS_NAMES = {
+    "HKUST": r"\bhkust\b|\bust\b|science\s*(?:and|&)\s*technology|科大|科技大學",
+    "CUHK": r"\bcuhk\b|chinese university|中大|中文大學",
+    "HKU": r"\bhku\b|(?<!chinese )university of hong kong(?!\s*of)|港大|香港大學",
+    "CityU": r"\bcityu\b|city university|城大",
+    "HKBU": r"\bhkbu\b|baptist university|浸大",
+    "PolyU": r"\bpolyu\b|polytechnic|理大",
+}
+
+
+def campuses_named(text: str) -> set[str]:
+    return {name for name, pattern in _CAMPUS_NAMES.items() if re.search(pattern, text, re.I)}
+
+
+_STUDIO = re.compile(r"\bstudios?\b|開放式|套房", re.I)
+_ROOM = re.compile(r"\b(?:own|a|private|single|shared)\s+room\b|房間", re.I)
+_PLACEHOLDER = re.compile(r"^\s*(?:none|n/?a|other|others|not sure|any|-)\s*\.?$", re.I)
+
+
+def tidy_suggestions(suggestions: list[str]) -> list[str]:
+    """Answers a student can tap: no placeholders ("None" offered as a campus, seen live), no repeats."""
+    seen: list[str] = []
+    for s in suggestions:
+        if s.strip() and not _PLACEHOLDER.match(s) and s.strip() not in seen:
+            seen.append(s.strip())
+    return seen
 
 
 def merge(previous: Profile, new: Profile) -> Profile:

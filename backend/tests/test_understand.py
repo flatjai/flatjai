@@ -31,3 +31,32 @@ def test_budget_the_model_dropped_is_filled_from_the_text():
     p = ground_profile(Profile(campus="HKUST"), "HKUST, 30k in total, under 40 minutes")
     assert p.budget_hkd_month == 30000 and p.budget_is_total and p.max_commute_min == 40
     assert ground_profile(Profile(), "between 8k and 10k").budget_hkd_month is None  # ambiguous: leave it
+
+
+def test_a_studio_is_a_whole_small_flat_not_a_room():
+    p = ground_profile(Profile(room_only=True), "Studio near HKU, up to 15k")
+    assert p.room_only is False and p.bedrooms == 0
+    assert ground_profile(Profile(room_only=True), "own room near HKU").room_only is True
+
+
+def test_placeholder_answers_are_not_offered():
+    from flatjai.agent.understand import tidy_suggestions
+
+    assert tidy_suggestions(["HKUST", "HKU", "PolyU", "None"]) == ["HKUST", "HKU", "PolyU"]
+    assert tidy_suggestions(["N/A", "Other", "HKUST, HK$9,000"]) == ["HKUST, HK$9,000"]
+
+
+def test_a_campus_the_student_named_is_never_lost():
+    """Seen live: "near Hang Hau, HKUST" came back with no campus, so FlatJai asked which one."""
+    brief = "2-bedroom flat to share with a friend, 30k total, near Hang Hau, HKUST, move in February"
+    assert ground_profile(Profile(), brief).campus == "HKUST"
+    assert (
+        ground_profile(Profile(), "a 2bhk near hong kong university of science & technology").campus
+        == "HKUST"
+    )
+    assert ground_profile(Profile(), "room near The Chinese University of Hong Kong").campus == "CUHK"
+    assert ground_profile(Profile(), "studio near the University of Hong Kong").campus == "HKU"
+    assert (
+        ground_profile(Profile(), "between HKU and CityU").campus is None
+    )  # two named: leave it to the model
+    assert ground_profile(Profile(campus="PolyU"), "cheaper please").campus == "PolyU"  # never cleared
