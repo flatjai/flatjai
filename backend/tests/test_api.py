@@ -170,3 +170,27 @@ async def test_conversations_group_a_brief_with_its_replies(client):
     assert [c["session_id"] for c in convos] == [other["session_id"], first["session_id"]]  # newest first
     assert [r["brief"] for r in convos[1]["runs"]] == ["flat near campus", "HKUST, 15k"]  # in order
     assert convos[1]["runs"][0]["homes"] >= 1
+
+
+async def test_one_conversation_with_its_events_in_one_request(client):
+    """Reopening a chat is one request: every turn in order, each with the events to rebuild it."""
+    first = await start(client, brief="flat near campus")
+    await client.get(f"/runs/{first['run_id']}/events")
+    second = await start(client, brief="HKUST, 15k", session_id=first["session_id"])
+    await client.get(f"/runs/{second['run_id']}/events")
+    for r in (first, second):
+        await finished(r["run_id"])
+
+    chat = (await client.get(f"/sessions/{first['session_id']}")).json()
+    assert chat["session_id"] == first["session_id"]
+    assert [t["id"] for t in chat["runs"]] == [first["run_id"], second["run_id"]]
+    streamed = parse_sse((await client.get(f"/runs/{second['run_id']}/events")).text)
+    stored = chat["runs"][1]["events"]
+    # the same history the stream replays
+    assert [e["type"] for e in stored] == [e["event"] for e in streamed]
+    assert [e["seq"] for e in stored] == sorted(e["seq"] for e in stored)
+    assert stored[-1]["type"] == "done" and chat["runs"][1]["homes"] >= 1
+
+    bare = (await client.get(f"/sessions/{first['session_id']}?events=false")).json()
+    assert all("events" not in t for t in bare["runs"])
+    assert (await client.get("/sessions/nope")).status_code == 404

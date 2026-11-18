@@ -118,6 +118,54 @@ class Store:
             out.append(sess)
         return out
 
+    async def conversation(self, session_id: str, with_events: bool = True) -> dict | None:
+        """One session's runs in order, each with how many homes it found and (by default) its stored
+        events: everything a client needs to rebuild the chat, in two queries."""
+        async with self._s() as s:
+            homes = (
+                select(m.ShortlistItem.run_id, func.count().label("homes"))
+                .group_by(m.ShortlistItem.run_id)
+                .subquery()
+            )
+            q = (
+                select(m.Run, func.coalesce(homes.c.homes, 0))
+                .outerjoin(homes, homes.c.run_id == m.Run.id)
+                .where(m.Run.session_id == session_id)
+                .order_by(m.Run.started_at)
+            )
+            rows = (await s.execute(q)).all()
+            if not rows:
+                return None
+            by_run: dict[str, list[dict]] = {}
+            if with_events:
+                eq = (
+                    select(m.RunEvent)
+                    .where(m.RunEvent.run_id.in_([run.id for run, _ in rows]))
+                    .order_by(m.RunEvent.run_id, m.RunEvent.seq)
+                )
+                for e in (await s.scalars(eq)).all():
+                    by_run.setdefault(e.run_id, []).append({"seq": e.seq, "type": e.type, "data": e.data})
+        runs = []
+        for run, n in rows:
+            turn = {
+                "id": run.id,
+                "brief": run.brief,
+                "status": run.status,
+                "started_at": run.started_at,
+                "ended_at": run.ended_at,
+                "model": run.model,
+                "homes": n,
+            }
+            if with_events:
+                turn["events"] = by_run.get(run.id, [])
+            runs.append(turn)
+        return {
+            "session_id": session_id,
+            "started_at": runs[0]["started_at"],
+            "last_at": runs[-1]["started_at"],
+            "runs": runs,
+        }
+
     async def unfinished_runs(self) -> list[m.Run]:
         async with self._s() as s:
             return list((await s.scalars(select(m.Run).where(m.Run.status == "running"))).all())

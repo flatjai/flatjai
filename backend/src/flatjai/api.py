@@ -19,6 +19,7 @@ from datetime import datetime
 
 import httpx
 from fastapi import FastAPI, Header, HTTPException, Request, Response
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -166,6 +167,16 @@ class Conversation(BaseModel):
 async def list_conversations(request: Request, limit: int = 30) -> list:
     """Conversations for the run inspector: a brief, the replies that continued it, and their runs."""
     return await request.app.state.store.conversations(min(limit, 100))
+
+
+@app.get("/sessions/{session_id}")
+async def get_conversation(session_id: str, request: Request, events: bool = True) -> dict:
+    """One chat in one request: its turns in order, each with the stored events that rebuild it
+    (the same history /runs/{id}/events replays). A turn still running streams the rest from its seq."""
+    chat = await request.app.state.store.conversation(session_id, with_events=events)
+    if chat is None:
+        raise HTTPException(404, f"no session {session_id}")
+    return jsonable_encoder(chat)
 
 
 @app.get("/runs/{run_id}", response_model=RunInfo)
