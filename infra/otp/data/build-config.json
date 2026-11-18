@@ -1,0 +1,5 @@
+{
+  "transitServiceStart": "-P1M",
+  "transitServiceEnd": "P1Y",
+  "osmDefaults": { "timeZone": "Asia/Hong_Kong" }
+}

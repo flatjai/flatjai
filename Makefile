@@ -1,10 +1,20 @@
-.PHONY: up down model migrate dev web test lint check-model eval-understand
+.PHONY: up down otp-data otp-graph model migrate dev web test lint check-model eval-understand
 
-up:            ## start Postgres and SearXNG
-	docker compose up -d --wait
+up:            ## start Postgres and SearXNG (and OpenTripPlanner once its graph is built)
+	docker compose $(if $(wildcard deploy/otp/data/graph.obj),--profile otp) up -d --wait
+
+OTP_DATA = deploy/otp/data
+otp-data:      ## download the HK bus/minibus GTFS and the OSM extract, and write the MTR GTFS
+	curl -sfL -o $(OTP_DATA)/gtfs.zip https://static.data.gov.hk/td/pt-headway-en/gtfs.zip
+	curl -sfL -o $(OTP_DATA)/hong-kong.osm.pbf https://download.geofabrik.de/asia/china/hong-kong-latest.osm.pbf
+	cd backend && uv run python scripts/build_mtr_gtfs.py
+
+otp-graph: otp-data  ## build the OpenTripPlanner graph (~2 min, needs ~3.5 GB for Docker)
+	docker run --rm -v "$(CURDIR)/$(OTP_DATA):/var/opentripplanner" -e JAVA_TOOL_OPTIONS=-Xmx3500m \
+		opentripplanner/opentripplanner:2.10.0 --build --save
 
 down:
-	docker compose down
+	docker compose --profile otp down
 
 model:         ## build the local model (qwen3:8b with a 16K context window)
 	ollama create flatjai-qwen3-8b -f deploy/ollama/Modelfile

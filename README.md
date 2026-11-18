@@ -11,8 +11,10 @@ M2: the full agent loop runs on live listings. Understand (asks one question if 
 missing) -> Plan -> Search -> Read -> Match -> Reflect (re-plan or read more) -> Answer, streamed to
 the UI over server-sent events. Every figure is checked against its page and every hard limit in
 code; the answer's claims are checked against the facts. Runs, events and traces are stored in
-Postgres, interrupted runs resume, and every run can be inspected at `/runs`.
-Commute is an offline estimate (MTR or bus, decision 0005), shown as "~N min". Not yet: OpenTripPlanner; frozen snapshot, record/replay, query suite and CI (M4).
+Postgres, interrupted runs resume, and every turn of a chat can be inspected from the chat.
+Commutes are real journeys from OpenTripPlanner (bus, minibus and MTR legs, drawn on each card's
+map; decision 0007), with an offline estimate when OTP is not running (decision 0005).
+Not yet: frozen snapshot, record/replay, query suite and CI (M4).
 
 ## Run it
 Needs [uv](https://docs.astral.sh/uv/), Docker, Node + pnpm and [Ollama](https://ollama.com)
@@ -20,13 +22,14 @@ Needs [uv](https://docs.astral.sh/uv/), Docker, Node + pnpm and [Ollama](https:/
 
 ```bash
 cp .env.example .env    # on a laptop model, set RUN_MAX_SECONDS=240
-make up                 # Postgres + SearXNG
+make otp-graph          # once: download HK GTFS + OSM, build the OpenTripPlanner graph (~2 min)
+make up                 # Postgres + SearXNG (+ OpenTripPlanner once its graph exists)
 make model              # qwen3:8b with a 16K context (Ollama defaults to 4K)
-make test               # 96 tests, no model, network or Postgres needed
+make test               # 171 tests, no model, network or Postgres needed
 make check-model        # the model returns a valid Profile
 make eval-understand    # 6 briefs -> expected profiles on the active model
 make dev                # migrates, then API on http://localhost:8000/docs
-make web                # UI on http://localhost:3000, run inspector on /runs
+make web                # UI on http://localhost:3000
 ```
 
 API: `POST /runs {brief, client_key, session_id?}` -> run and session ids; `GET /runs/{id}/events`

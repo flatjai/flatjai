@@ -19,6 +19,7 @@ class Settings(BaseSettings):
 
     # Tools
     searxng_url: str = "http://localhost:8888"
+    otp_url: str | None = None  # OpenTripPlanner (make otp-graph); unset: the offline commute estimate
     data_dir: Path = BACKEND_DIR.parent / "data"
     user_agent: str = "FlatJai/0.1 (HKUST CSIT6000V student project; 1 request per 2 s per site)"
     min_fetch_interval_s: float = 2.0  # per domain; robots.txt crawl-delay wins if longer

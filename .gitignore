@@ -10,3 +10,8 @@ node_modules/
 data/raw/
 data/blobs/
 deploy/tacc/server-url.txt
+
+# OpenTripPlanner: downloaded and built data (see deploy/otp/README.md); only configs are kept
+deploy/otp/data/*
+!deploy/otp/data/build-config.json
+!deploy/otp/data/router-config.json

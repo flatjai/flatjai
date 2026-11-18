@@ -1,0 +1,6 @@
+{
+  "routingDefaults": {
+    "walk": { "speed": 1.25 },
+    "transferSlack": "2m"
+  }
+}

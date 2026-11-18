@@ -76,14 +76,16 @@ CAMPUSES: dict[str, Campus] = {
 
 
 class Leg(BaseModel):
-    mode: str  # walk | bus | mtr
+    mode: str  # walk | bus | minibus | mtr | tram | ferry
     text: str
     minutes: float
+    path: list[tuple[float, float]] = []  # the leg's line on a map (from OpenTripPlanner), [(lat, lon)]
+    color: str | None = None  # the line's own colour, when the operator gives one (MTR lines)
 
 
 class Place(BaseModel):
     name: str
-    kind: str  # home | station | campus
+    kind: str  # home | station | board | alight | campus
     lat: float
     lon: float
 

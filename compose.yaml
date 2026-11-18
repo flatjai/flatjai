@@ -23,5 +23,18 @@ services:
       interval: 3s
       retries: 20
 
+  otp:   # OpenTripPlanner: real bus, minibus and MTR journeys (build the graph first: make otp-graph)
+    image: opentripplanner/opentripplanner:2.10.0
+    profiles: [otp]
+    command: ["--load", "--serve"]
+    ports: ["8080:8080"]
+    volumes: ["./deploy/otp/data:/var/opentripplanner"]
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xmx3g"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]  # no wget or curl in the image
+      interval: 5s
+      retries: 60
+
 volumes:
   pgdata:
