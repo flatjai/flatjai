@@ -141,8 +141,13 @@ export async function createRun(brief: string, clientKey: string, sessionId?: st
 
 /** Subscribe to a run's events. EventSource reconnects by itself and sends Last-Event-ID, so the
  *  server resumes without loss; we close it at the run's terminal event. Returns an unsubscribe. */
-export function subscribeRun(runId: string, onEvent: (e: RunEvent) => void, onConnectionError: () => void) {
-  const source = new EventSource(`${API_URL}/runs/${runId}/events`);
+export function subscribeRun(
+  runId: string,
+  onEvent: (e: RunEvent) => void,
+  onConnectionError: () => void,
+  after = 0, // the last event seq already shown: a reopened chat streams only what is new
+) {
+  const source = new EventSource(`${API_URL}/runs/${runId}/events${after ? `?after=${after}` : ""}`);
   for (const type of EVENT_TYPES) {
     source.addEventListener(type, (msg) => {
       onEvent({ type, data: JSON.parse((msg as MessageEvent).data) } as RunEvent);
@@ -206,5 +211,11 @@ export type Turn = {
   homes: number;
 };
 export type Conversation = { session_id: string; started_at: string; last_at: string; runs: Turn[] };
-export const listConversations = () => getJson<Conversation[]>("/sessions");
+
+/** A stored event, exactly as the run's stream sent it. */
+export type StoredEvent = { seq: number; type: RunEvent["type"]; data: RunEvent["data"] };
+/** One chat with every turn's events: enough to rebuild the page in one request. */
+export type ChatDetail = Omit<Conversation, "runs"> & { runs: (Turn & { events: StoredEvent[] })[] };
+export const getChat = (sessionId: string) => getJson<ChatDetail>(`/sessions/${sessionId}`);
+export const listConversations = (limit = 50) => getJson<Conversation[]>(`/sessions?limit=${limit}`);
 export const getTrace = (runId: string) => getJson<Trace>(`/runs/${runId}/trace`);

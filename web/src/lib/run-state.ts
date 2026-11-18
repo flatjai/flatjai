@@ -1,7 +1,7 @@
 // Conversation and run state as a pure reducer over server events; components only render it.
-import type { Card, Counters, Observation, Profile, RunEvent, ShortlistItem, Stage, Usage } from "./api";
+import type { Card, ChatDetail, Counters, Observation, Profile, RunEvent, ShortlistItem, Stage, Usage } from "./api";
 
-export type Turn = { role: "user" | "assistant"; text: string };
+export type Turn = { role: "user" | "assistant"; text: string; runId?: string };
 
 /** When each stage started and ended, in seconds since the run started (from the events' t). */
 export type StageTiming = { start: number; end: number | null };
@@ -67,18 +67,23 @@ export type Action =
   | { kind: "started"; runId: string; sessionId: string }
   | { kind: "event"; event: RunEvent }
   | { kind: "fail"; message: string }
+  | { kind: "load"; state: RunState }
   | { kind: "reset" };
 
 export function runReducer(state: RunState, action: Action): RunState {
   switch (action.kind) {
     case "reset":
       return initialRun;
+    case "load":
+      return action.state;
     case "start": {
       // a new turn in the same conversation: the last run's exchange moves into the history
       const history = [...state.turns];
       if (state.brief) history.push({ role: "user", text: state.brief });
-      if (state.question) history.push({ role: "assistant", text: state.question.text });
-      else if (state.summary) history.push({ role: "assistant", text: state.summary });
+      const runId = state.runId ?? undefined;
+      if (state.question) history.push({ role: "assistant", text: state.question.text, runId });
+      else if (state.summary) history.push({ role: "assistant", text: state.summary, runId });
+      else if (state.error) history.push({ role: "assistant", text: state.error, runId });
       return {
         ...initialRun,
         status: "starting",
@@ -181,3 +186,22 @@ export function orderedCards(state: RunState): { card: Card; rank: number | null
 }
 
 export const busy = (s: RunState) => s.status === "starting" || s.status === "running";
+
+/** Run states that are final: nothing more will stream. */
+export const SETTLED_RUNS = new Set(["done", "needs_input", "error"]);
+
+/** Rebuild a chat from its stored events in one pass, through the same reducer the live stream
+ *  uses, so a reopened chat reads exactly as it did live. A last turn that is still running comes
+ *  back as `live`, with the seq to resume its stream after. */
+export function buildChat(chat: ChatDetail): { state: RunState; live: { runId: string; after: number } | null } {
+  let state = initialRun;
+  chat.runs.forEach((turn) => {
+    state = runReducer(state, { kind: "start", brief: turn.brief });
+    state = runReducer(state, { kind: "started", runId: turn.id, sessionId: chat.session_id });
+    for (const e of turn.events)
+      state = runReducer(state, { kind: "event", event: { type: e.type, data: e.data } as RunEvent });
+  });
+  const last = chat.runs.at(-1);
+  const live = last && !SETTLED_RUNS.has(last.status) ? { runId: last.id, after: last.events.at(-1)?.seq ?? 0 } : null;
+  return { state, live };
+}

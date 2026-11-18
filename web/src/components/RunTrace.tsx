@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-import { getTrace, type Span, type Trace } from "@/lib/api";
+import { getTrace, type Span, type Trace, type Turn } from "@/lib/api";
+import { loadChat } from "@/lib/chats";
 
 const KIND_COLOUR: Record<Span["kind"], string> = {
   stage: "bg-accent/30",
@@ -57,6 +58,25 @@ export function RunTrace() {
     getTrace(id).then(setTrace, (e) => setError(String(e)));
   }, [id]);
 
+  // the chat this run belongs to: its turns, to step between them and back to the chat
+  const sessionId = trace?.run.session_id ?? null;
+  const [turns, setTurns] = useState<Turn[]>([]);
+  useEffect(() => {
+    if (!sessionId) return;
+    let live = true;
+    // the chat, which also warms the cache: "Back to chat" then opens it at once
+    loadChat(sessionId).then(
+      (chat) => {
+        if (live) setTurns(chat.runs);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [sessionId]);
+  const turnNo = turns.findIndex((t) => t.id === id) + 1;
+
   const view = useMemo(() => rows(trace?.spans ?? []), [trace]);
   const model = trace?.totals.model;
   const errors = trace?.spans.filter((s) => s.error).length ?? 0;
@@ -64,11 +84,41 @@ export function RunTrace() {
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-10">
-      <header className="flex items-baseline justify-between gap-4">
-        <h1 className="text-2xl font-bold">Run {id}</h1>
-        <Link href="/runs" className="text-sm text-accent hover:underline">
-          ← all runs
+      <header className="flex flex-col gap-4">
+        <Link
+          href={sessionId ? `/?c=${sessionId}` : "/"}
+          className="self-start text-sm text-muted transition-colors hover:text-fg"
+        >
+          ← Back to chat
         </Link>
+        <div className="flex items-baseline justify-between gap-4">
+          <h1 className="text-2xl font-bold">
+            {turnNo && turns.length > 1 ? `Turn ${turnNo} of ${turns.length}` : "Run"}
+          </h1>
+          <span className="text-xs text-faint tabular-nums">{id}</span>
+        </div>
+        {turns.length > 1 ? (
+          <nav aria-label="Turns in this chat" className="flex flex-wrap gap-1.5">
+            {turns.map((t, i) => {
+              const current = t.id === id;
+              return (
+                <Link
+                  key={t.id}
+                  href={`/runs/${t.id}`}
+                  replace
+                  title={t.brief}
+                  aria-current={current ? "page" : undefined}
+                  className={`max-w-[16rem] truncate rounded-full px-3 py-1.5 text-sm transition-colors ${
+                    current ? "bg-raised-2 text-fg" : "text-faint ring-1 ring-line-faint hover:text-fg"
+                  }`}
+                >
+                  <span className="mr-1.5 text-xs opacity-60">{i + 1}</span>
+                  {t.brief}
+                </Link>
+              );
+            })}
+          </nav>
+        ) : null}
       </header>
       {error ? <p className="text-warn">{error}</p> : null}
       {trace ? (
@@ -99,7 +149,9 @@ export function RunTrace() {
                   className="grid w-full grid-cols-[minmax(0,2fr)_minmax(0,3fr)_4.5rem] items-center gap-2 px-3 py-1.5 text-left hover:bg-bg"
                 >
                   <span className="truncate" style={{ paddingLeft: depth * 12 }}>
-                    <span className={s.error ? "text-warn" : s.kind === "stage" ? "font-semibold" : ""}>{label(s)}</span>
+                    <span className={s.error ? "text-warn" : s.kind === "stage" ? "font-semibold" : ""}>
+                      {label(s)}
+                    </span>
                   </span>
                   <span className="relative h-3 rounded bg-line/40">
                     <span
