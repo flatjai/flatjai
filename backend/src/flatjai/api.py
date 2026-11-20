@@ -56,8 +56,9 @@ def build_run_manager(http: httpx.AsyncClient, model: ModelClient, store: Store)
         ),
         store,
         blobs,
+        offline=s.fj_offline,
     )
-    searcher = CachedSearcher(Searcher(http, s.searxng_url), store)
+    searcher = CachedSearcher(Searcher(http, s.searxng_url), store, offline=s.fj_offline)
     geocoder = Geocoder(http, store)
     router = TransitRouter(http, s.otp_url, store) if s.otp_url else None
 

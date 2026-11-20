@@ -1,4 +1,5 @@
-.PHONY: up down otp-data otp-graph model migrate dev web test lint check-model eval-understand
+.PHONY: up down otp-data otp-graph model migrate dev web test lint check-model eval-understand \
+	snapshot snapshot-import eval eval-score
 
 up:            ## start Postgres and SearXNG (and OpenTripPlanner once its graph is built)
 	docker compose $(if $(wildcard deploy/otp/data/graph.obj),--profile otp) up -d --wait
@@ -40,3 +41,21 @@ check-model:   ## a typed call to the active model returns a valid Profile
 
 eval-understand: ## Understand stage on the active model: briefs -> expected profile fields
 	cd backend && uv run python ../eval/understand_check.py
+
+SNAPSHOT ?= $(lastword $(sort $(wildcard data/snapshot-*.tar.zst)))
+snapshot:      ## freeze every cached page, extraction and tool answer into data/snapshot-<date>.tar.zst
+	scripts/snapshot.sh export
+
+snapshot-import: ## load the frozen snapshot (SNAPSHOT=file, default: the newest) into Postgres
+	scripts/snapshot.sh import $(SNAPSHOT)
+
+SYSTEMS ?= b0 b1 flatjai
+REPEAT ?= 1
+eval:          ## the query suite on the frozen snapshot (offline) for each system, then the report
+	@for s in $(SYSTEMS); do \
+		(cd backend && FJ_OFFLINE=1 uv run python ../eval/run_suite.py --system $$s --repeat $(REPEAT) --tag offline) || exit 1; \
+	done
+	$(MAKE) eval-score
+
+eval-score:    ## score the latest offline result of each system -> eval/results/report.md
+	cd backend && uv run python ../eval/score.py $$(for s in $(SYSTEMS); do ls -t ../eval/results/*-$$s-offline.jsonl | head -1; done)
