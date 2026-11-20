@@ -60,3 +60,27 @@ def test_a_campus_the_student_named_is_never_lost():
         ground_profile(Profile(), "between HKU and CityU").campus is None
     )  # two named: leave it to the model
     assert ground_profile(Profile(campus="PolyU"), "cheaper please").campus == "PolyU"  # never cleared
+
+
+def test_campuses_written_next_to_chinese_are_found_and_win_over_the_model():
+    # seen live: "CUHK附近" gave districts ["CUHK"] and no campus; 港大 was read as HKUST
+    p = ground_profile(
+        Profile(districts=["CUHK"], budget_hkd_month=6500), "CUHK附近 own room, 每月6500以下, 40 min 內"
+    )
+    assert p.campus == "CUHK" and p.districts == []
+    p = ground_profile(
+        Profile(campus="HKUST", budget_hkd_month=15000), "想租港大附近嘅開放式單位, budget 15k"
+    )
+    assert p.campus == "HKU"
+    # "ust" inside a word is not HKUST
+    assert ground_profile(Profile(), "just a room in Sha Tin").campus is None
+
+
+def test_a_flat_brief_is_a_whole_flat_even_if_the_model_says_room():
+    # seen live: "1-bedroom flat for one" parsed as room_only true on one run of three
+    p = ground_profile(
+        Profile(room_only=True, bedrooms=1), "1-bedroom flat for one, PolyU, up to 18k a month"
+    )
+    assert p.room_only is False
+    p = ground_profile(Profile(room_only=True), "Own room in a shared flat near HKU, 8k")
+    assert p.room_only is True  # a room in a flat is still a room

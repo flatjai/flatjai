@@ -97,8 +97,16 @@ def ground_profile(profile: Profile, text: str) -> Profile:
         update["budget_hkd_month"] = money.pop()
         if _TOTAL.search(text):
             update["budget_is_total"] = True
-    if profile.campus is None and len(named := campuses_named(text)) == 1:
-        update["campus"] = named.pop()  # the model dropped a campus the student wrote
+    named = campuses_named(text)
+    if len(named) == 1 and (profile.campus or "").lower() != (campus := next(iter(named))).lower():
+        # the model dropped a campus the student wrote, or swapped it (seen live: 港大 read as HKUST)
+        update["campus"] = campus
+    if named and any(campuses_named(d) for d in profile.districts):
+        # a campus is not a district ("CUHK附近" gave districts ["CUHK"] and no campus, seen live)
+        update["districts"] = [d for d in profile.districts if not campuses_named(d)]
+    if _WHOLE.search(text) and not _ROOM.search(text) and profile.room_only is not False:
+        # "1-bedroom flat for one" is a whole flat (seen live: read as a room on one run of three)
+        update["room_only"] = False
     if _STUDIO.search(text) and not _ROOM.search(text):
         # a studio is a whole small flat with no separate bedroom, not a room in a shared flat
         update |= {"room_only": False, "bedrooms": 0}
@@ -109,14 +117,16 @@ def ground_profile(profile: Profile, text: str) -> Profile:
     return profile.model_copy(update=update) if update else profile
 
 
-# Campus names as students write them; the Chinese University is matched before "University of Hong Kong"
+# Campus names as students write them; the Chinese University is matched before "University of Hong Kong".
+# Boundaries are ASCII-only: a CJK character counts as a word character, so r"\bcuhk\b" missed "CUHK附近".
+_A, _Z = r"(?<![a-z0-9])", r"(?![a-z0-9])"
 _CAMPUS_NAMES = {
-    "HKUST": r"\bhkust\b|\bust\b|science\s*(?:and|&)\s*technology|科大|科技大學",
-    "CUHK": r"\bcuhk\b|chinese university|中大|中文大學",
-    "HKU": r"\bhku\b|(?<!chinese )university of hong kong(?!\s*of)|港大|香港大學",
-    "CityU": r"\bcityu\b|city university|城大",
-    "HKBU": r"\bhkbu\b|baptist university|浸大",
-    "PolyU": r"\bpolyu\b|polytechnic|理大",
+    "HKUST": rf"{_A}hkust{_Z}|{_A}ust{_Z}|science\s*(?:and|&)\s*technology|科大|科技大學",
+    "CUHK": rf"{_A}cuhk{_Z}|chinese university|中大|中文大學",
+    "HKU": rf"{_A}hku{_Z}|(?<!chinese )university of hong kong(?!\s*of)|港大|香港大學",
+    "CityU": rf"{_A}cityu{_Z}|city university|城大",
+    "HKBU": rf"{_A}hkbu{_Z}|baptist university|浸大",
+    "PolyU": rf"{_A}polyu{_Z}|polytechnic|理大",
 }
 
 
@@ -125,6 +135,7 @@ def campuses_named(text: str) -> set[str]:
 
 
 _STUDIO = re.compile(r"\bstudios?\b|開放式|套房", re.I)
+_WHOLE = re.compile(r"\b\d\s*-?\s*(?:bed(?:room)?s?|br)\b|\bflat\b|\bapartment\b|單位|[一兩二三]房", re.I)
 _ROOM = re.compile(r"\b(?:own|a|private|single|shared)\s+room\b|房間", re.I)
 _PLACEHOLDER = re.compile(r"^\s*(?:none|n/?a|other|others|not sure|any|-)\s*\.?$", re.I)
 
