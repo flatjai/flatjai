@@ -319,3 +319,16 @@ def test_ordinals_in_the_summary_follow_the_final_ranking():
     assert check_summary("The second best is The Esplanade.", SHORT, p, [1, 2])
     assert check_summary("The second best is Park Central.", SHORT, p, [1, 2]) is None
     assert check_summary("The third is Park Central, for its space.", SHORT, p, [2, 1]) is None
+
+
+def test_the_same_estate_named_differently_on_two_sites_is_one_home():
+    # seen live: "Tseung Kwan O · East Point City" and "Hang Hau East Point City", both HK$4,800
+    a = listing(title="Tseung Kwan O · East Point City", rent_hkd_month=4800, saleable_sqft=None)
+    b = listing(title="Hang Hau East Point City", rent_hkd_month=4800, saleable_sqft=None)
+    assert same_home(a, b)
+    assert not same_home(a, listing(title="Hang Hau Metro City", rent_hkd_month=4800, saleable_sqft=None))
+    # a name that is only a place is compared in full, not reduced to nothing
+    assert not same_home(
+        listing(title="Hang Hau", rent_hkd_month=4800, saleable_sqft=None),
+        listing(title="Tseung Kwan O", rent_hkd_month=4800, saleable_sqft=None),
+    )

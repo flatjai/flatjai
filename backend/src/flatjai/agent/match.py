@@ -5,8 +5,10 @@ A fact the listing does not state is "unknown" (ok=None): shown to the student, 
 Commute joins the checks in M3.
 """
 
+import json
 import re
 from datetime import timedelta
+from pathlib import Path
 
 from ..schemas import Listing, Profile
 from ..tools.cost import Cost
@@ -106,9 +108,76 @@ def _norm_name(text: str | None) -> str:
     return re.sub(r"[^a-z0-9一-鿿]", "", (text or "").lower())
 
 
+# Place words that sites put around an estate's name in different ways: "Tseung Kwan O · East Point
+# City" on one site, "Hang Hau East Point City" on another (seen live). Station names (MTR Open Data)
+# and the 18 districts, longest first so "Tseung Kwan O" goes before "Kwan".
+_DISTRICTS = [
+    "Central and Western",
+    "Wan Chai",
+    "Eastern",
+    "Southern",
+    "Yau Tsim Mong",
+    "Sham Shui Po",
+    "Kowloon City",
+    "Wong Tai Sin",
+    "Kwun Tong",
+    "Kwai Tsing",
+    "Tsuen Wan",
+    "Tuen Mun",
+    "Yuen Long",
+    "North",
+    "Tai Po",
+    "Sha Tin",
+    "Sai Kung",
+    "Islands",
+    "Hong Kong",
+    "HongKong",
+    "Kowloon",
+    "China",
+    "Clear Water Bay",
+    "Sai Ying Pun",
+    "Mid-Levels",
+    "Po Lam",
+    "Kennedy Town",
+    "Pok Fu Lam",
+]
+_PLACE_WORDS = sorted(
+    {
+        _norm_name(n)
+        for n in [
+            *_DISTRICTS,
+            *(
+                s["name"]
+                for s in json.loads((Path(__file__).resolve().parents[1] / "data" / "mtr.json").read_text())[
+                    "stations"
+                ].values()
+            ),
+        ]
+    },
+    key=len,
+    reverse=True,
+)
+
+
+def estate_core(text: str | None) -> str:
+    """The estate's own name: place words removed. Empty when nothing but places is left."""
+    core = _norm_name(text)
+    for word in _PLACE_WORDS:
+        if word:
+            core = core.replace(word, "")
+    return core
+
+
 def same_home(a: Listing, b: Listing) -> bool:
-    """Design rule: same estate, area within 3%, rent within 5% (one flat listed by several agents)."""
-    if _norm_name(a.estate or a.title) != _norm_name(b.estate or b.title):
+    """Design rule: same estate, area within 3%, rent within 5% (one flat listed by several agents).
+    The estate is compared without place words, so two sites naming it differently still match;
+    a name that is only places ("Hang Hau") is compared in full."""
+    name_a, name_b = a.estate or a.title, b.estate or b.title
+    core_a, core_b = estate_core(name_a), estate_core(name_b)
+    if len(core_a) >= 4 and len(core_b) >= 4:
+        if core_a != core_b:
+            return False
+    elif _norm_name(name_a) != _norm_name(name_b):
         return False
     if (
         a.saleable_sqft
