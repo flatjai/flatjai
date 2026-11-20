@@ -15,3 +15,6 @@ deploy/tacc/server-url.txt
 deploy/otp/data/*
 !deploy/otp/data/build-config.json
 !deploy/otp/data/router-config.json
+
+# evaluation run logs
+eval/results/*.log

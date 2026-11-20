@@ -258,6 +258,14 @@ class Store:
                 row.hits += 1
             return row
 
+    async def cache_rows(self, namespace: str, key_prefix: str) -> list[m.CacheEntry]:
+        """Every entry in a namespace whose readable key starts with the prefix (offline search)."""
+        async with self._s() as s:
+            q = select(m.CacheEntry).where(
+                m.CacheEntry.namespace == namespace, m.CacheEntry.key.startswith(key_prefix, autoescape=True)
+            )
+            return list(await s.scalars(q))
+
     async def cache_put(self, namespace: str, key: str, value: Any) -> None:
         row = {
             "namespace": namespace,

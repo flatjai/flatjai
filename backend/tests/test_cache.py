@@ -55,3 +55,40 @@ async def test_cached_results_pass_todays_filters(store):
     await store.cache_put("search", "en|amber|room hang hau", [orlando])
     amber = portal_for(orlando["url"])
     assert await CachedSearcher(Engine(), store).search("room Hang Hau", portal=amber) == []
+
+
+async def test_offline_search_never_calls_the_engine_and_uses_the_nearest_query(store):
+    engine = Engine()
+    await CachedSearcher(engine, store).search("Hang Hau flat rent")
+    offline = CachedSearcher(engine, store, offline=True)
+    assert [r.url for r in await offline.search("rent flat Hang Hau")] == [LIST_URL]  # same words
+    assert [r.url for r in await offline.search("Hang Hau flat for rent cheap")] == [LIST_URL]  # nearest
+    assert await offline.search("Kennedy Town studio") == []  # nothing similar
+    assert engine.calls == 1
+
+
+async def test_offline_fetch_serves_old_pages_and_refuses_new_ones(store, tmp_path):
+    from datetime import UTC, datetime
+
+    from flatjai.storage.blobs import BlobStore
+    from flatjai.tools.cache import CachedFetcher
+    from flatjai.tools.fetch import FetchError
+
+    blobs = BlobStore(tmp_path)
+    page_hash = blobs.put(b"<html><body>Rent $9,000</body></html>")
+    await store.put_page(
+        page_hash=page_hash,
+        url="https://example.hk/a",
+        final_url="https://example.hk/a",
+        title="A",
+        text="Rent $9,000",
+        http_status=200,
+        fetched_at=datetime(2020, 1, 1, tzinfo=UTC),
+    )
+    f = CachedFetcher(None, store, blobs, offline=True)
+    assert (await f.fetch("https://example.hk/a")).text == "Rent $9,000"
+    try:
+        await f.fetch("https://example.hk/b")
+    except FetchError:
+        return
+    raise AssertionError("expected FetchError")

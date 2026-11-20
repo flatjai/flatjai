@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     min_fetch_interval_s: float = 2.0  # per domain; robots.txt crawl-delay wins if longer
     page_text_max_chars: int = 16_000  # ~6K tokens of mixed English/Chinese before extraction
 
+    # Frozen snapshot: pages and searches only from the cache, never the network (evaluation, demo)
+    fj_offline: bool = False
+
     # Agent budgets (90 s per brief; a laptop model may need more, set RUN_MAX_SECONDS)
     run_max_seconds: float = 90.0
 
