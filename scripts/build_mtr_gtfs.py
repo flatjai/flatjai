@@ -2,9 +2,16 @@
 
 The Transport Department's GTFS (data.gov.hk) covers buses, minibuses, trams and ferries, but not the
 MTR. This feed adds it from data FlatJai already holds: each line's station order (MTR Open Data)
-and station coordinates (src/flatjai/data/mtr.json). Running times use the speeds calibrated for
-FlatJai's own commute estimate (tools/transit.py), so the two never disagree about the train; trains
-run every few minutes all day (GTFS frequencies), since the MTR publishes no timetable as open data.
+and station coordinates (src/flatjai/data/mtr.json). Trains run every few minutes all day (GTFS
+frequencies), since the MTR publishes no timetable as open data.
+
+Running times: straight-line distance x TRACK_FACTOR at a line speed, plus DWELL_MIN per stop. The
+speeds are fitted to end-to-end timetable times (2026-11-20), not to door-to-door journeys:
+  Tsuen Wan line Central -> Tsuen Wan 30 min (the old 33 km/h gave 39), East Rail Hung Hom -> Lo Wu
+  42 min (gave 47), Airport Express Hong Kong -> Airport 24 min (gave 27).
+Checked on short rides: Central -> HKU 5.2 min (real ~5, was 6.6), Mong Kok -> Central 10.7 (real
+~11, was 13.9). The offline estimate (tools/transit.py) keeps its slower speeds on purpose: they
+were tuned door to door, with waits and interchanges folded in, which OTP models itself.
 
 Run: cd backend && uv run python scripts/build_mtr_gtfs.py
 """
@@ -16,7 +23,10 @@ import zipfile
 from datetime import date, timedelta
 from pathlib import Path
 
-from flatjai.tools.transit import DWELL_MIN, FAST_LINES_M_PER_MIN, TRACK_FACTOR, TRAIN_M_PER_MIN, distance_m
+from flatjai.tools.transit import DWELL_MIN, TRACK_FACTOR, distance_m
+
+URBAN_M_PER_MIN = 770  # ~46 km/h between stops
+LINE_M_PER_MIN = {"EAL": 950, "TML": 950, "TCL": 950, "AEL": 1450}
 
 ROOT = Path(__file__).resolve().parents[2]
 MTR = ROOT / "backend/src/flatjai/data/mtr.json"
@@ -56,7 +66,7 @@ def hhmmss(seconds: float) -> str:
 
 
 def hop_seconds(line: str, a: dict, b: dict) -> float:
-    speed = FAST_LINES_M_PER_MIN.get(line, TRAIN_M_PER_MIN)
+    speed = LINE_M_PER_MIN.get(line, URBAN_M_PER_MIN)
     return (distance_m((a["lat"], a["lon"]), (b["lat"], b["lon"])) * TRACK_FACTOR / speed + DWELL_MIN) * 60
 
 
