@@ -163,8 +163,19 @@ async def test_missing_budget_asks_once_then_continues_in_the_session(store):
     assert events2[-1].type == "done"  # move_in is still missing, but we never ask twice
 
 
+async def test_a_missing_move_in_alone_never_stops_the_search(store):
+    replies = {
+        "Profile": {"budget_hkd_month": 15000, "campus": "HKUST"},
+        "ClarifyDecision": {"ask": True, "question": "When do you need to move in?"},
+    }
+    events, _, fake, _ = await run(store, replies)
+    names = [r["response_format"]["json_schema"]["name"] for r in fake.requests]
+    assert "ClarifyDecision" not in names and events[-1].type == "done"
+
+
 async def test_model_decides_not_to_ask(store):
-    events, _, fake, _ = await run(store, {"Profile": {"budget_hkd_month": 15000, "campus": "HKUST"}})
+    replies = {"Profile": {"campus": "HKUST"}, "ClarifyDecision": {"ask": False, "question": ""}}
+    events, _, fake, _ = await run(store, replies, brief="2 bed near HKUST")
     names = [r["response_format"]["json_schema"]["name"] for r in fake.requests]
     assert "ClarifyDecision" in names and events[-1].type == "done"
 

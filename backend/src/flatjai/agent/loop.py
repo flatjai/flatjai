@@ -29,6 +29,7 @@ from .state import RunState, Stage
 from .understand import decide_clarify, parse_brief, tidy_suggestions
 
 log = logging.getLogger(__name__)
+BLOCKING = ("budget_hkd_month", "campus")
 
 
 async def understand_stage(ctx: RunContext, state: RunState) -> Stage:
@@ -41,7 +42,10 @@ async def understand_stage(ctx: RunContext, state: RunState) -> Stage:
     await ctx.bus.emit("state", stage="understand", profile=state.profile, missing=missing)
 
     not_asked = [f for f in missing if f not in (session.asked if session else [])]
-    if not_asked:
+    # Only a missing budget or campus is worth stopping for. Move-in alone never is: listings rarely
+    # state availability, so the search would come out the same (seen live: Qwen stopped three
+    # complete briefs to ask "When do you need to move in?"). It is still asked with a real gap.
+    if any(f in BLOCKING for f in not_asked):
         decision = await decide_clarify(ctx.tools.model, ctx.brief, profile, not_asked)
         if decision.ask and decision.question.strip():
             await ctx.store.update_session(
