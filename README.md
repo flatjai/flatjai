@@ -14,7 +14,12 @@ code; the answer's claims are checked against the facts. Runs, events and traces
 Postgres, interrupted runs resume, and every turn of a chat can be inspected from the chat.
 Commutes are real journeys from OpenTripPlanner (bus, minibus and MTR legs, drawn on each card's
 map; decision 0007), with an offline estimate when OTP is not running (decision 0005).
-Not yet: frozen snapshot, record/replay, query suite and CI (M4).
+M4: a 20-brief query suite in 7 categories runs on a frozen snapshot of the market (no listing site
+is touched), against two baselines on the same model: B0 (the model alone) and B1 (one search, the
+top pages, one answer). A scorer checks every shown home in its own code. Results in
+`eval/results/report.md`, failures and their fixes in `docs/failure-analysis.md` (decision 0009).
+CI runs the tests and lint on every push.
+Not yet: Qwen 27B on TACC (M5), precision@5 against hand labels.
 
 ## Run it
 Needs [uv](https://docs.astral.sh/uv/), Docker, Node + pnpm and [Ollama](https://ollama.com)
@@ -25,7 +30,7 @@ cp .env.example .env    # on a laptop model, set RUN_MAX_SECONDS=240
 make otp-graph          # once: download HK GTFS + OSM, build the OpenTripPlanner graph (~2 min)
 make up                 # Postgres + SearXNG (+ OpenTripPlanner once its graph exists)
 make model              # qwen3:8b with a 16K context (Ollama defaults to 4K)
-make test               # 171 tests, no model, network or Postgres needed
+make test               # 180 tests, no model, network or Postgres needed
 make check-model        # the model returns a valid Profile
 make eval-understand    # 6 briefs -> expected profiles on the active model
 make dev                # migrates, then API on http://localhost:8000/docs
@@ -36,6 +41,14 @@ API: `POST /runs {brief, client_key, session_id?}` -> run and session ids; `GET 
 streams `state`, `progress`, `card` and one of `done`/`clarify`/`error` (resumes with `Last-Event-ID`);
 `GET /runs/{id}/trace` returns the spans. A reply or refinement is a new run in the same session.
 
+Evaluate on the frozen snapshot (no network; see `eval/README.md`):
+
+```bash
+make snapshot-import    # load data/snapshot-<date>.tar.zst into Postgres
+make eval               # B0, B1 and FlatJai over the suite, then eval/results/report.md
+make eval SYSTEMS=flatjai REPEAT=3
+```
+
 Switch to TACC: write `SERVICE_BASE_URL` into `deploy/tacc/server-url.txt`, set `FJ_MODEL=tacc`.
 
 ## Layout
@@ -43,8 +56,9 @@ Switch to TACC: write `SERVICE_BASE_URL` into `deploy/tacc/server-url.txt`, set 
 |---|---|
 | `backend/` | FastAPI app, agent loop, model client, tools |
 | `web/` | Next.js UI: brief, live progress, verified cards |
-| `data/` | listing snapshots and labels |
-| `eval/` | test briefs, baselines, scoring |
+| `data/` | the frozen snapshot (`snapshot-<date>.tar.zst`) |
+| `eval/` | query suite, baselines, scorer, results |
+| `scripts/` | snapshot export and import |
 | `deploy/tacc/` | TACC job config |
 | `deploy/searxng/` | SearXNG settings (JSON API on) |
 | `docs/` | decisions (`decisions/`) and `BUILD_LOG.md` |
