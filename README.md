@@ -22,19 +22,31 @@ CI runs the tests and lint on every push.
 Not yet: Qwen 27B on TACC (M5), precision@5 against hand labels.
 
 ## Run it
-Needs [uv](https://docs.astral.sh/uv/), Docker, Node + pnpm and [Ollama](https://ollama.com)
-(`brew install ollama && brew services start ollama && ollama pull qwen3:8b`).
+One command from a fresh clone (macOS or Linux; on Windows use WSL2):
 
 ```bash
-cp .env.example .env    # on a laptop model, set RUN_MAX_SECONDS=240
-make otp-graph          # once: download HK GTFS + OSM, build the OpenTripPlanner graph (~2 min)
-make up                 # Postgres + SearXNG (+ OpenTripPlanner once its graph exists)
-make model              # qwen3:8b with a 16K context (Ollama defaults to 4K)
-make test               # 180 tests, no model, network or Postgres needed
-make check-model        # the model returns a valid Profile
-make eval-understand    # 6 briefs -> expected profiles on the active model
-make dev                # migrates, then API on http://localhost:8000/docs
+./setup.sh              # checks tools, installs, starts services, loads the snapshot, builds OTP, pulls the model
+./setup.sh --no-otp     # skip OpenTripPlanner (Docker needs ~4 GB more); commutes use the offline estimate
+./setup.sh --no-model   # skip the ~5 GB local model (use FJ_MODEL=tacc instead)
+```
+
+It needs [Docker Desktop](https://www.docker.com/products/docker-desktop/) running,
+[uv](https://docs.astral.sh/uv/), Node 20.9+ with pnpm, zstd and [Ollama](https://ollama.com); it
+says how to install anything missing, and is safe to run again (it never overwrites your database).
+Then, in two terminals:
+
+```bash
+make dev                # API on http://localhost:8000/docs (FJ_OFFLINE=1 make dev: snapshot only)
 make web                # UI on http://localhost:3000
+```
+
+Other commands:
+
+```bash
+make test               # 181 tests, no model, network or Postgres needed
+make check-model        # the model returns a valid Profile
+make eval               # the query suite on the snapshot -> eval/results/report.md
+make down               # stop the services (data stays in the Docker volume)
 ```
 
 API: `POST /runs {brief, client_key, session_id?}` -> run and session ids; `GET /runs/{id}/events`
