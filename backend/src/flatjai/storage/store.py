@@ -77,6 +77,34 @@ class Store:
         async with self._s.begin() as s:
             await s.execute(update(m.Run).where(m.Run.id == run_id).values(**values))
 
+    async def heartbeat(self, run_id: str, owner: str) -> None:
+        async with self._s.begin() as s:
+            await s.execute(
+                update(m.Run).where(m.Run.id == run_id, m.Run.owner == owner).values(heartbeat_at=m.utcnow())
+            )
+
+    async def claim_run(self, run_id: str, owner: str, stale_before: datetime) -> bool:
+        """Take over a running run whose owner stopped: one conditional UPDATE, so of two processes
+        resuming at once only one gets it."""
+        async with self._s.begin() as s:
+            res = await s.execute(
+                update(m.Run)
+                .where(
+                    m.Run.id == run_id,
+                    m.Run.status == "running",
+                    (m.Run.heartbeat_at.is_(None)) | (m.Run.heartbeat_at < stale_before),
+                )
+                .values(owner=owner, heartbeat_at=m.utcnow())
+            )
+            return res.rowcount == 1
+
+    async def release_run(self, run_id: str, owner: str) -> None:
+        """A clean stop (shutdown, dev reload): the next process may resume the run at once."""
+        async with self._s.begin() as s:
+            await s.execute(
+                update(m.Run).where(m.Run.id == run_id, m.Run.owner == owner).values(heartbeat_at=None)
+            )
+
     async def list_runs(self, limit: int = 30) -> list[m.Run]:
         async with self._s() as s:
             return list((await s.scalars(select(m.Run).order_by(m.Run.started_at.desc()).limit(limit))).all())

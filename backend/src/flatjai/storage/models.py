@@ -54,6 +54,10 @@ class Run(Base):
     model: Mapped[str] = mapped_column(String(100))
     started_at: Mapped[datetime] = mapped_column(default=utcnow)
     ended_at: Mapped[datetime | None]
+    # the RunManager executing it and its last sign of life: a resume claims only a run whose owner
+    # stopped (no heartbeat, or a stale one), never one another process is still executing
+    owner: Mapped[str | None] = mapped_column(String(32))
+    heartbeat_at: Mapped[datetime | None]
 
 
 class RunEvent(Base):

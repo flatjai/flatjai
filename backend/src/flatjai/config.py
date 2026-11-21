@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # Agent budgets (90 s per brief; a laptop model may need more, set RUN_MAX_SECONDS)
     run_max_seconds: float = 90.0
 
+    # Experiment E2: switch off agent parts (agent/ablations.py), comma-separated; evaluation only
+    fj_ablate: str = ""
+
     # Web UI origin allowed to call the API from the browser
     cors_origins: list[str] = ["http://localhost:3000"]
 

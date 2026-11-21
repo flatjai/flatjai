@@ -194,3 +194,74 @@ async def test_one_conversation_with_its_events_in_one_request(client):
     bare = (await client.get(f"/sessions/{first['session_id']}?events=false")).json()
     assert all("events" not in t for t in bare["runs"])
     assert (await client.get("/sessions/nope")).status_code == 404
+
+
+async def _running_run(store, run_id="r1", **values):
+    if await store.get_session("s") is None:
+        await store.create_session("s")
+    await store.create_run(
+        id=run_id,
+        session_id="s",
+        brief="15k near HKUST",
+        status="running",
+        stage="understand",
+        state={},
+        model_profile="fake",
+        model="fake",
+        **values,
+    )
+
+
+async def test_a_run_another_process_is_executing_is_not_taken_over(store):
+    """A dev server starting beside an evaluation used to resume the evaluation's live run, and two
+    processes then wrote the same run's events (duplicate run_id, seq)."""
+    from flatjai.storage.models import utcnow
+
+    await _running_run(store, owner="eval-process", heartbeat_at=utcnow())
+    runs = manager(store)
+    assert await runs.resume_unfinished() == []
+    assert (await store.get_run("r1")).owner == "eval-process"
+
+
+async def test_a_run_whose_owner_went_quiet_is_resumed_and_claimed(store):
+    from datetime import timedelta
+
+    from flatjai.storage.models import utcnow
+
+    await _running_run(store, owner="crashed", heartbeat_at=utcnow() - timedelta(minutes=5))
+    runs = manager(store)
+    assert await runs.resume_unfinished() == ["r1"]
+    await asyncio.wait_for(asyncio.shield(runs.tasks["r1"]), 5)
+    run = await store.get_run("r1")
+    assert run.owner == runs.owner and run.status == "done"
+
+
+async def test_only_one_of_two_processes_claims_a_run(store):
+    from datetime import timedelta
+
+    from flatjai.storage.models import utcnow
+
+    await _running_run(store)  # no heartbeat: released by a clean stop
+    stale_before = utcnow() - timedelta(seconds=45)
+    got = await asyncio.gather(
+        store.claim_run("r1", "a", stale_before), store.claim_run("r1", "b", stale_before)
+    )
+    assert sorted(got) == [False, True]
+
+
+async def test_a_clean_stop_releases_the_run_for_the_next_process(store):
+    from flatjai.storage.models import utcnow
+
+    await _running_run(store, owner="old-server", heartbeat_at=utcnow())
+    await store.release_run("r1", "someone-else")  # only the owner may release it
+    assert (await store.get_run("r1")).heartbeat_at is not None
+    await store.release_run("r1", "old-server")
+    assert await manager(store).resume_unfinished() == ["r1"]
+
+
+async def test_new_runs_carry_their_owner_and_a_heartbeat(store):
+    runs = manager(store)
+    run, _ = await runs.start("Studio near HKU, 15k")
+    stored = await store.get_run(run.id)
+    assert stored.owner == runs.owner and stored.heartbeat_at is not None
+    await runs.shutdown()

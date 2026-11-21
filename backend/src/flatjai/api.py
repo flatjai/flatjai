@@ -12,6 +12,7 @@ Shared across runs: one HTTP client, one Fetcher (so the per-domain rate limit h
 users), one model connection with the server's concurrency limit, one database engine.
 """
 
+import asyncio
 import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -24,6 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from .agent.ablations import parse_ablations
 from .agent.context import Toolbox
 from .agent.events import Event
 from .agent.runs import RunManager
@@ -43,7 +45,11 @@ from .tools.search import Searcher
 HEARTBEAT_S = 15.0
 
 
-def build_run_manager(http: httpx.AsyncClient, model: ModelClient, store: Store) -> RunManager:
+def build_run_manager(
+    http: httpx.AsyncClient, model: ModelClient, store: Store, ablate: frozenset[str] | None = None
+) -> RunManager:
+    """`ablate` (E2) defaults to FJ_ABLATE; the evaluation passes its own, since settings() is cached
+    at import (a variable set afterwards in-process would be ignored)."""
     s = settings()
     blobs = BlobStore(s.data_dir / "blobs")
     fetcher = CachedFetcher(
@@ -71,7 +77,10 @@ def build_run_manager(http: httpx.AsyncClient, model: ModelClient, store: Store)
             router=router,
         )
 
-    return RunManager(store, make_tools, Budget(max_seconds=s.run_max_seconds))
+    budget = Budget(
+        max_seconds=s.run_max_seconds, ablate=parse_ablations(s.fj_ablate) if ablate is None else ablate
+    )
+    return RunManager(store, make_tools, budget)
 
 
 @asynccontextmanager
@@ -85,7 +94,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.store = Store(engine)
         app.state.runs = build_run_manager(http, app.state.model, app.state.store)
         await app.state.runs.resume_unfinished()
+        sweep = asyncio.create_task(app.state.runs.sweep())
         yield
+        sweep.cancel()
         await app.state.runs.shutdown()
     await engine.dispose()
 

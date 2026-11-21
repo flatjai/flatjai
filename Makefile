@@ -1,4 +1,4 @@
-.PHONY: up down otp-data otp-graph model migrate dev web test lint check-model eval-understand \
+.PHONY: up down otp-data otp-graph model migrate dev web test lint check-model eval-understand ablate \
 	snapshot snapshot-import eval eval-score
 
 up:            ## start Postgres and SearXNG (and OpenTripPlanner once its graph is built)
@@ -56,6 +56,13 @@ eval:          ## the query suite on the frozen snapshot (offline) for each syst
 		(cd backend && FJ_OFFLINE=1 uv run python ../eval/run_suite.py --system $$s --repeat $(REPEAT) --tag offline) || exit 1; \
 	done
 	$(MAKE) eval-score
+
+ABLATIONS ?= no_reflect no_dedup model_facts
+ablate:        ## E2: the suite offline with one agent part off at a time, then the report with E1
+	@for a in $(ABLATIONS); do \
+		(cd backend && FJ_OFFLINE=1 uv run python ../eval/run_suite.py --system flatjai --ablate $$a --repeat $(REPEAT) --tag offline) || exit 1; \
+	done
+	$(MAKE) eval-score SYSTEMS="$(SYSTEMS) $(addprefix flatjai-,$(ABLATIONS))"
 
 eval-score:    ## score the latest offline result of each system -> eval/results/report.md
 	cd backend && uv run python ../eval/score.py $$(for s in $(SYSTEMS); do ls -t ../eval/results/*-$$s-offline.jsonl | head -1; done)
