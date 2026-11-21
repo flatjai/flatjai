@@ -32,7 +32,7 @@ case "${1:-}" in
     file="${2:?usage: scripts/snapshot.sh import <file>}"
     tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
     zstd -dc "$file" | tar -C "$tmp" -xf -
-    { echo "begin; truncate ${TABLES[*]// /, } cascade;"; cat "$tmp/cache.sql"; echo "commit;"; } \
+    { echo "set client_min_messages = warning; begin; truncate $(IFS=,; echo "${TABLES[*]}") cascade;"; cat "$tmp/cache.sql"; echo "commit;"; } \
       | "${PG[@]}" psql -q -U flatjai -d flatjai -v ON_ERROR_STOP=1 > /dev/null
     mkdir -p data/blobs && cp -Rn "$tmp/data/blobs/." data/blobs/ 2>/dev/null || true
     echo "imported $file"
