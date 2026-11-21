@@ -7,7 +7,7 @@ up:            ## start Postgres and SearXNG (and OpenTripPlanner once its graph
 OTP_DATA = deploy/otp/data
 otp-data:      ## download the HK bus/minibus GTFS and the OSM extract, and write the MTR GTFS
 	curl -sfL -o $(OTP_DATA)/gtfs.zip https://static.data.gov.hk/td/pt-headway-en/gtfs.zip
-	curl -sfL -o $(OTP_DATA)/hong-kong.osm.pbf https://download.geofabrik.de/asia/china/hong-kong-latest.osm.pbf
+	curl -sfL -o $(OTP_DATA)/hong-kong.osm.pbf https://download.geofabrik.de/asia/china/hong-kong/hong-kong-latest.osm.pbf
 	cd backend && uv run python scripts/build_mtr_gtfs.py
 
 otp-graph: otp-data  ## build the OpenTripPlanner graph (~2 min, needs ~3.5 GB for Docker)
