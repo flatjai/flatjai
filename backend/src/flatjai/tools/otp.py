@@ -8,7 +8,9 @@ When OTP is not running or finds no route, the caller falls back to the offline 
 (tools/transit.py), so FlatJai never depends on it.
 """
 
+import asyncio
 import re
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
 import httpx
@@ -30,6 +32,23 @@ query($o: PlanLabeledLocationInput!, $d: PlanLabeledLocationInput!, $t: OffsetDa
     } } }
   }
 }"""
+
+
+@dataclass(frozen=True)
+class Shuttle:
+    """A free campus bus the GTFS does not carry: OTP alone walks students up the hill."""
+
+    stop: str
+    lat: float
+    lon: float
+    minutes: float  # ride and wait, as in the offline estimate (transit.CAMPUSES egress)
+    text: str
+
+
+# CUHK's campus buses leave from University station; without them OTP walked 18 min from the
+# station, so a bus stopping nearer tied with East Rail from Sha Tin (both 32 min, seen 2026-11-21).
+SHUTTLES = {"CUHK": Shuttle("University station", 22.4134, 114.2102, 8, "campus bus from University station")}
+
 MODES = {"WALK": "walk", "BUS": "bus", "SUBWAY": "mtr", "RAIL": "mtr", "TRAM": "tram", "FERRY": "ferry"}
 
 
@@ -41,20 +60,38 @@ class TransitRouter:
         target = CAMPUSES.get(campus)
         if target is None:
             return None
-        key = f"{campus}|{home[0]:.4f},{home[1]:.4f}"
+        key = f"{campus}|{home[0]:.4f},{home[1]:.4f}" + ("|shuttle" if campus in SHUTTLES else "")
         if self.store is not None and (row := await self.store.cache_get("otp", key)) is not None:
             async with span("route", "tool", campus=campus, cache="hit"):
                 return Commute.model_validate(row.value) if row.value else None
         async with span("route", "tool", campus=campus, home=list(home)) as sp:
-            journey = await self._ask(home, target)
+            journey = await self._best(home, campus)
             sp.attrs["minutes"] = journey.minutes if journey else None
         if self.store is not None and journey is not None:  # a failure is not cached: OTP may be back later
             await self.store.cache_put("otp", key, journey.model_dump())
         return journey
 
-    async def _ask(self, home: tuple[float, float], campus) -> Commute | None:
+    async def _best(self, home: tuple[float, float], campus: str) -> Commute | None:
+        """Straight to campus, or (where there is one) to the campus bus and on by it: the faster,
+        and on a tie the one with a train (more frequent and on time than a road bus)."""
+        target, shuttle = CAMPUSES[campus], SHUTTLES.get(campus)
+        if shuttle is None:
+            return await self._ask(home, target, target.name)
+        direct, via = await asyncio.gather(
+            self._ask(home, target, target.name),
+            self._ask(home, target, target.name, shuttle=shuttle),
+        )
+        options = [j for j in (direct, via) if j is not None]
+        return min(
+            options, key=lambda j: (j.minutes, not any(leg.mode == "mtr" for leg in j.legs)), default=None
+        )
+
+    async def _ask(
+        self, home: tuple[float, float], campus, campus_name: str, shuttle: Shuttle | None = None
+    ) -> Commute | None:
         point = lambda lat, lon: {"location": {"coordinate": {"latitude": lat, "longitude": lon}}}  # noqa: E731
-        variables = {"o": point(*home), "d": point(campus.lat, campus.lon), "t": morning().isoformat()}
+        dest = point(shuttle.lat, shuttle.lon) if shuttle else point(campus.lat, campus.lon)
+        variables = {"o": point(*home), "d": dest, "t": morning().isoformat()}
         try:
             resp = await self.http.post(self.url, json={"query": QUERY, "variables": variables}, timeout=20.0)
             resp.raise_for_status()
@@ -63,8 +100,9 @@ class TransitRouter:
             return None
         if not edges:
             return None
-        best = min((e["node"] for e in edges), key=lambda n: n["duration"])
-        return to_commute(best, home, campus.name)
+        rail = lambda n: not any(leg["mode"] in ("SUBWAY", "RAIL") for leg in n["legs"])  # noqa: E731
+        best = min((e["node"] for e in edges), key=lambda n: (round(n["duration"] / 60), rail(n)))
+        return to_commute(best, home, campus_name, shuttle)
 
 
 def morning(today: date | None = None) -> datetime:
@@ -74,7 +112,9 @@ def morning(today: date | None = None) -> datetime:
     return datetime(day.year, day.month, day.day, 8, 30, tzinfo=HKT)
 
 
-def to_commute(itinerary: dict, home: tuple[float, float], campus_name: str) -> Commute:
+def to_commute(
+    itinerary: dict, home: tuple[float, float], campus_name: str, shuttle: Shuttle | None = None
+) -> Commute:
     legs: list[Leg] = []
     route = [Place(name="Home", kind="home", lat=home[0], lon=home[1])]
     raw = itinerary["legs"]
@@ -84,7 +124,8 @@ def to_commute(itinerary: dict, home: tuple[float, float], campus_name: str) -> 
         agency = ((line.get("agency") or {}).get("gtfsId") or "").split(":")[-1]
         if mode == "bus" and agency == "GMB":
             mode = "minibus"
-        to = "campus" if i == len(raw) - 1 else _stop_name(leg["to"]["name"])
+        final = i == len(raw) - 1 and (shuttle is None or mode == "walk")  # a train ends at its station
+        to = ("the campus bus" if shuttle else "campus") if final else _stop_name(leg["to"]["name"])
         name = line.get("shortName") or line.get("longName") or ""
         if mode == "walk":
             text = f"walk to {to}"
@@ -100,8 +141,14 @@ def to_commute(itinerary: dict, home: tuple[float, float], campus_name: str) -> 
             for end, kind in ((leg["from"], "board"), (leg["to"], "alight")):
                 route.append(Place(name=_stop_name(end["name"]), kind=kind, lat=end["lat"], lon=end["lon"]))
     campus = CAMPUSES_BY_NAME[campus_name]
+    minutes = itinerary["duration"] / 60
+    if shuttle:
+        hub, end = (shuttle.lat, shuttle.lon), (campus.lat, campus.lon)
+        legs.append(Leg(mode="bus", text=shuttle.text, minutes=shuttle.minutes, path=[hub, end]))
+        route.append(Place(name=shuttle.stop, kind="board", lat=shuttle.lat, lon=shuttle.lon))
+        minutes += shuttle.minutes
     route.append(Place(name=campus_name, kind="campus", lat=campus.lat, lon=campus.lon))
-    return Commute(minutes=round(itinerary["duration"] / 60), legs=legs, method="otp", route=route)
+    return Commute(minutes=round(minutes), legs=legs, method="otp", route=route)
 
 
 CAMPUSES_BY_NAME = {c.name: c for c in CAMPUSES.values()}
