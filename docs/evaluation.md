@@ -18,6 +18,45 @@ The query suite, the baselines and the scorer.
 All three use the active model profile (`FJ_MODEL`), so a comparison is about the system, not the model.
 B0 and B1 get all turns joined into one brief and cannot ask a question.
 
+## Ablations (E2)
+
+`FJ_ABLATE` (or `run_suite.py --ablate`) switches off one agent part; see `backend/src/flatjai/agent/ablations.py`.
+
+| Ablation | What is off | What the scorer shows |
+|---|---|---|
+| `no_reflect` | read-more and re-plan: one search pass, then answer | homes per brief, outcome ok |
+| `no_dedup` | merging the same home found twice | duplicate homes shown |
+| `model_facts` | the cost tool and the router: the model states cost and commute | cost figures off the cost tool, commute error vs router, limits judged on the router's minutes |
+
+```
+make ablate                       # the three ablations offline, then one report with E1
+make ablate ABLATIONS=no_dedup REPEAT=3
+```
+
+### E2 results (2026-11-21, Qwen 8B, snapshot, 20 briefs x 1)
+
+| Metric | FlatJai | no_reflect | no_dedup | model_facts |
+|---|---|---|---|---|
+| Constraint satisfaction | 100% | 100% | 100% | 76% |
+| Outcome ok | 100% | 90% | 100% | 85% |
+| Homes shown per brief | 3.5 | 2.6 | 3.6 | 2.7 |
+| Duplicate homes shown | 0% | 0% | 3% | 0% |
+| Cost figures off the cost tool | 0% | 0% | 0% | 100% |
+| Commute error vs router (median / max) | 0 | 0 | 0 | 17 / 29 min |
+| Seconds per brief (median) | 26 | 17 | 26 | 38 |
+
+Without the tools the model understated every cost (monthly by a median HK$600, move-in by HK$18,900)
+and put 24% of shown homes over a limit the router would have caught. Without re-planning, harder
+briefs end with fewer or no homes. Duplicates matter less on this snapshot than expected. Full table
+with intervals: `results/report.md`.
+
+## Draft cases
+
+Cases 21 to 50 in `suite.yaml` carry `status: draft`: written, not yet reviewed, and not yet in the
+snapshot. `make eval` skips them. To add them: review each `truth`, record their pages with one live
+pass (`FJ_OFFLINE=0 uv run python ../eval/run_suite.py --system flatjai --drafts --tag record`),
+`make snapshot`, then drop the `status` lines.
+
 ## Frozen snapshot
 
 A live run caches every page, search, extraction, geocode and OTP journey in Postgres. With
