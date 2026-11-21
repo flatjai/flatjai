@@ -24,6 +24,7 @@ class Budget:
     reads_per_round: int = 8
     enough: int = 3  # re-plan if fewer homes than this fit
     shortlist_size: int = 5
+    ablate: frozenset[str] = frozenset()  # E2 only (agent/ablations.py); empty = the full agent
 
 
 class Check(BaseModel):

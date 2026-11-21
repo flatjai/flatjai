@@ -68,6 +68,9 @@ def forced_decision(ctx: RunContext, state: RunState) -> str | None:
 async def reflect_stage(ctx: RunContext, state: RunState) -> Stage:
     summary = outcome_summary(state)
     async with span("decide", "stage", summary=summary) as sp:
+        if "no_reflect" in ctx.budget.ablate:
+            sp.attrs |= {"decision": "answer", "forced": "ablation no_reflect"}
+            return "answer"
         if reason := forced_decision(ctx, state):
             sp.attrs |= {"decision": "answer", "forced": reason}
             return "answer"

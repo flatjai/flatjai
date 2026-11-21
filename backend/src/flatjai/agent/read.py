@@ -22,6 +22,7 @@ from ..tools.preview import preview_from_page
 from ..tools.search import SearchResult
 from ..tools.transit import CAMPUSES, Commute, commute, station_named_in
 from ..tracing import span
+from .ablations import model_cost, model_facts
 from .ask import ask_for
 from .context import RunContext
 from .match import hard_checks, quick_reject, with_commute
@@ -120,17 +121,37 @@ async def read_one(ctx: RunContext, result: SearchResult, profile: Profile) -> t
     c = cost(listing)
     checks = hard_checks(listing, c, profile)
     trip = await _commute(ctx, listing, profile)
+    commute_data = None
     if trip is not None:
         journey, precision = trip
         checks = with_commute(checks, journey.minutes, journey.summary(), profile, precision)
+        commute_data = journey.model_dump() | {"precision": precision}
+    cost_data = c.model_dump(mode="json")
+    if "model_facts" in ctx.budget.ablate:  # E2: the model's figures replace the tools' (kept as tool_*)
+        try:
+            f = await model_facts(ctx.tools.model, listing, profile)
+        except ValueError:
+            return None, "model facts failed"
+        mc, tool_totals = model_cost(f, c)
+        cost_data = mc.model_dump(mode="json") | tool_totals
+        checks = with_commute(
+            hard_checks(listing, mc, profile), f.commute_min, "model estimate", profile, "building"
+        )
+        commute_data = {
+            "minutes": f.commute_min,
+            "method": "model",
+            "legs": [],
+            "precision": "model",
+            "tool_minutes": journey.minutes if trip else None,
+        }
     match = Match(
         listing_id=row.id,
         listing=listing_data,
-        cost=c.model_dump(mode="json"),
+        cost=cost_data,
         checks=checks,
         fetched_at=page.fetched_at.isoformat(),
         dropped=row.dropped,
-        commute=journey.model_dump() | {"precision": precision} if trip else None,
+        commute=commute_data,
     )
     return match, "ok"
 

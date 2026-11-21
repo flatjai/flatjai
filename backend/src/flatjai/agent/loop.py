@@ -80,7 +80,7 @@ async def plan_stage(ctx: RunContext, state: RunState) -> Stage:
 
 
 async def match_stage(ctx: RunContext, state: RunState) -> Stage:
-    duplicates = mark_duplicates(state.matches)
+    duplicates = 0 if "no_dedup" in ctx.budget.ablate else mark_duplicates(state.matches)
     profile = Profile.model_validate(state.profile)
     state.relaxations = (
         relaxations(state.matches, profile, state.card_rents) if len(state.fits()) < ctx.budget.enough else []

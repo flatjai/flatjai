@@ -90,14 +90,41 @@ def check_home(h: dict, truth: dict) -> dict[str, bool | None]:
     if "bedrooms_min" in truth:
         b = h.get("bedrooms")
         out["bedrooms"] = None if b is None else b >= truth["bedrooms_min"]
-    if "commute_max" in truth:
-        c = h.get("commute_min")
+    if "commute_max" in truth:  # judged on the router's minutes where known (not a model's claim)
+        c = h.get("tool_commute_min", h.get("commute_min"))
         out["commute"] = None if c is None else c <= truth["commute_max"]
     return out
 
 
 _MONEY = re.compile(r"(?:HK\$|\$)\s?(\d[\d,]*)")
 _MIN = re.compile(r"(\d+)\s?(?:min|minutes|分鐘)")
+
+
+_PLACE_WORDS = re.compile(r"\b(?:hong kong|china|tower|block|flat|room|for|rent|in|the)\b|[^a-z0-9 ]", re.I)
+
+
+def _title_words(title: str) -> frozenset[str]:
+    """The building's words: the part after "District ·" when there is one, without filler."""
+    building = title.split("·", 1)[-1]
+    return frozenset(_PLACE_WORDS.sub(" ", building.lower()).split())
+
+
+def duplicate_homes(homes: list[dict]) -> int:
+    """Shown homes that repeat an earlier one: the same page, or the same rent with the same size or
+    mostly the same title words (the scorer's own rule, simpler than the agent's)."""
+    dups = 0
+    for i, h in enumerate(homes):
+        for g in homes[:i]:
+            same_page = h["source_url"] == g["source_url"]
+            same_rent = h.get("rent_hkd_month") == g.get("rent_hkd_month")
+            size = h.get("saleable_sqft") or h.get("gross_sqft")
+            same_size = size is not None and size == (g.get("saleable_sqft") or g.get("gross_sqft"))
+            a, b = _title_words(h.get("title") or ""), _title_words(g.get("title") or "")
+            similar = bool(a and b) and len(a & b) / len(a | b) >= 0.5
+            if same_page or (same_rent and (same_size or similar)):
+                dups += 1
+                break
+    return dups
 
 
 def summary_figures(summary: str) -> list[int]:
@@ -148,6 +175,15 @@ def score_case(row: dict, pages: dict[str, str]) -> dict:
     facts += len(figs)
     supported += sum(f in allowed for f in figs)
 
+    # E2 measures, FlatJai rows only (they carry the tools' figures beside the shown ones)
+    commute_err = [
+        abs(h["commute_min"] - h["tool_commute_min"])
+        for h in homes
+        if h.get("commute_min") is not None and h.get("tool_commute_min") is not None
+    ]
+    cost_pairs = [
+        (h[k], h[f"tool_{k}"]) for h in homes for k in ("monthly_hkd", "move_in_hkd") if f"tool_{k}" in h
+    ]
     asked = first["asked"] is not None
     ask_ok = asked == expect.get("ask_first", False)
     if expect.get("min_items", 0) == 0:  # infeasible: honest, and helpful when empty
@@ -173,6 +209,10 @@ def score_case(row: dict, pages: dict[str, str]) -> dict:
         "facts": facts,
         "supported": supported,
         "invented_listings": invented_listings,
+        "duplicates": duplicate_homes(homes),
+        "commute_err": commute_err,
+        "cost_figures": len(cost_pairs),
+        "cost_off": sum(shown != tool for shown, tool in cost_pairs),
         "summary_figures": len(figs),
         "summary_supported": sum(f in allowed for f in figs),
         "asked": asked,
@@ -230,13 +270,16 @@ METRICS = {
     "Invented listings": lambda rs: ratio(rs, "invented_listings", "homes"),
     "Correct ask/no-ask": lambda rs: sum(r["ask_ok"] for r in rs) / len(rs),
     "Outcome ok": lambda rs: sum(r["outcome_ok"] for r in rs) / len(rs),
+    "Duplicate homes shown": lambda rs: ratio(rs, "duplicates", "homes"),
+    "Cost figures off the cost tool": lambda rs: ratio(rs, "cost_off", "cost_figures"),
 }
 
 
 def report(scored: list[dict]) -> str:
-    systems = sorted({r["system"] for r in scored}, key=["b0", "b1", "flatjai"].index)
+    order = ["b0", "b1", "flatjai"]
+    systems = sorted({r["system"] for r in scored}, key=lambda s: (order.index(s) if s in order else 3, s))
     lines = ["# FlatJai evaluation", ""]
-    lines += ["## E1: systems on the suite (95% bootstrap intervals over cases)", ""]
+    lines += ["## E1 and E2: systems and ablations on the suite (95% bootstrap intervals over cases)", ""]
     lines += ["| Metric | " + " | ".join(systems) + " |", "|---|" + "---|" * len(systems)]
     for name, fn in METRICS.items():
         cells = []
@@ -257,6 +300,12 @@ def report(scored: list[dict]) -> str:
                 f"{statistics.median(vals):.1f}" if key != "homes" else f"{statistics.mean(vals):.1f}"
             )
         lines.append(f"| {name} | " + " | ".join(cells) + " |")
+    errs = {s: [e for r in scored if r["system"] == s for e in r["commute_err"]] for s in systems}
+    lines.append(
+        "| Commute error vs router, min (median / max) | "
+        + " | ".join(f"{statistics.median(v):.0f} / {max(v)}" if v else "n/a" for v in errs.values())
+        + " |"
+    )
     lines += ["", f"Cases: {', '.join(f'{s} {sum(r["system"] == s for r in scored)}' for s in systems)}.", ""]
 
     lines += ["## By category", ""]
@@ -301,12 +350,25 @@ def report(scored: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def ablation_mismatches(rows: list[dict]) -> list[str]:
+    """Rows labelled `flatjai-<ablation>` whose run did not record that ablation as active (the first
+    E2 run on 2026-11-21 ran the full agent under ablation labels)."""
+    bad = []
+    for r in rows:
+        named = sorted(r["system"].split("-")[1:]) if r["system"].startswith("flatjai-") else []
+        if named and r.get("ablate") != named:
+            bad.append(f"{r['system']}/{r['case']}")
+    return sorted(set(bad))
+
+
 async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("files", nargs="+", type=Path)
     ap.add_argument("--out", type=Path, default=EVAL / "results" / "report.md")
     args = ap.parse_args()
     rows = [json.loads(line) for f in args.files for line in f.read_text().splitlines() if line.strip()]
+    if bad := ablation_mismatches(rows):
+        raise SystemExit(f"ablation named in the label but not active in the run: {bad}")
     urls = {h["source_url"] for r in rows for t in r["turns"] for h in t["homes"]}
     pages = await load_pages(urls)
     scored = [score_case(r, pages) for r in rows]

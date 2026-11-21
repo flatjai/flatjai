@@ -10,6 +10,7 @@ score.py scores them the same way. B0 and B1 see all turns joined into one brief
 
 Run from backend/ (FJ_OFFLINE=1 for the frozen snapshot):
   uv run python ../eval/run_suite.py --system flatjai [--cases id1,id2] [--repeat 3] [--tag name]
+  uv run python ../eval/run_suite.py --system flatjai --ablate no_reflect   # E2, see agent/ablations.py
 """
 
 import argparse
@@ -24,6 +25,7 @@ import httpx
 import yaml
 from pydantic import BaseModel, Field
 
+from flatjai.agent.ablations import parse_ablations
 from flatjai.api import build_run_manager
 from flatjai.config import active_profile, settings
 from flatjai.model_client import ModelClient
@@ -38,9 +40,12 @@ EVAL = Path(__file__).resolve().parent
 RESULTS = EVAL / "results"
 
 
-def load_cases(only: set[str] | None) -> list[dict]:
+def load_cases(only: set[str] | None, drafts: bool = False) -> list[dict]:
+    """Reviewed cases; drafts (status: draft, not yet in the snapshot) only when asked or named."""
     cases = yaml.safe_load((EVAL / "suite.yaml").read_text())["cases"]
-    return [c for c in cases if not only or c["id"] in only]
+    if only:
+        return [c for c in cases if c["id"] in only]
+    return [c for c in cases if drafts or c.get("status") != "draft"]
 
 
 # --- FlatJai -----------------------------------------------------------------------------------
@@ -64,6 +69,10 @@ def home_from_card(card: dict, rank: int, reasons: list[str]) -> dict:
         "commute_method": commute.get("method"),
         "monthly_hkd": card["cost"]["monthly_hkd"],
         "move_in_hkd": card["cost"]["move_in_hkd"],
+        # the tools' figures: the same as shown, except under the model_facts ablation (E2)
+        "tool_commute_min": commute.get("tool_minutes", commute.get("minutes")),
+        "tool_monthly_hkd": card["cost"].get("tool_monthly_hkd", card["cost"]["monthly_hkd"]),
+        "tool_move_in_hkd": card["cost"].get("tool_move_in_hkd", card["cost"]["move_in_hkd"]),
         "reasons": reasons,
     }
 
@@ -226,16 +235,22 @@ async def main() -> int:
     ap.add_argument("--cases", help="comma-separated case ids (default: all)")
     ap.add_argument("--repeat", type=int, default=1)
     ap.add_argument("--tag", default="")
+    ap.add_argument("--drafts", action="store_true", help="include draft cases (e.g. to record them live)")
+    ap.add_argument("--ablate", default="", help="E2: comma-separated parts to switch off (flatjai only)")
     args = ap.parse_args()
+    ablate = parse_ablations(args.ablate)  # given to the run manager: settings() is cached at import
+    if ablate and args.system != "flatjai":
+        ap.error("--ablate applies to --system flatjai only")
+    label = args.system + "".join(f"-{a.strip()}" for a in args.ablate.split(",") if a.strip())
 
     s = settings()
-    cases = load_cases(set(args.cases.split(",")) if args.cases else None)
+    cases = load_cases(set(args.cases.split(",")) if args.cases else None, drafts=args.drafts)
     RESULTS.mkdir(exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M")
-    out = RESULTS / f"{stamp}-{args.system}{'-' + args.tag if args.tag else ''}.jsonl"
+    out = RESULTS / f"{stamp}-{label}{'-' + args.tag if args.tag else ''}.jsonl"
     profile = active_profile()
     print(
-        f"{args.system} on {profile.name} ({profile.model}), offline={s.fj_offline}, "
+        f"{label} on {profile.name} ({profile.model}), offline={s.fj_offline}, "
         f"{len(cases)} cases x {args.repeat} -> {out.relative_to(EVAL.parent)}"
     )
 
@@ -243,7 +258,7 @@ async def main() -> int:
     store = Store(engine)
     model = ModelClient(profile)
     async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as http:
-        runs = build_run_manager(http, model, store) if args.system == "flatjai" else None
+        runs = build_run_manager(http, model, store, ablate=ablate) if args.system == "flatjai" else None
         blobs = BlobStore(s.data_dir / "blobs")
         fetcher = CachedFetcher(
             Fetcher(
@@ -269,11 +284,12 @@ async def main() -> int:
                     row = {
                         "case": case["id"],
                         "category": case["category"],
-                        "system": args.system,
+                        "system": label,
                         "repeat": rep,
                         "model": profile.model,
                         "profile": profile.name,
                         "offline": s.fj_offline,
+                        "ablate": sorted(runs.budget.ablate) if runs is not None else [],
                         "wall_s": round(time.monotonic() - t0, 1),
                         **result,
                     }

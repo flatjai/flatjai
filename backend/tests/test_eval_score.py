@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "eval"))
 
-from score import check_home, number_on_page, score_case  # noqa: E402
+from score import ablation_mismatches, check_home, duplicate_homes, number_on_page, score_case  # noqa: E402
 
 
 def test_numbers_are_found_as_written_on_the_page():
@@ -73,3 +73,36 @@ def test_summary_figures_must_come_from_the_cards_or_the_budget():
     assert ok["summary_figures"] == 4 and ok["summary_supported"] == 4
     bad = score_case(row([home()], "only HK$7,200 a month"), pages)
     assert bad["summary_supported"] == 0
+
+
+def test_commute_limit_is_judged_on_the_router_minutes():
+    truth = {"budget": 9000, "commute_max": 30}
+    # model_facts ablation: the model claimed 15 min, the router found 45
+    assert (
+        check_home({"rent_hkd_month": 8000, "commute_min": 15, "tool_commute_min": 45}, truth)["commute"]
+        is False
+    )
+    assert check_home({"rent_hkd_month": 8000, "commute_min": 25}, truth)["commute"] is True
+
+
+def test_duplicates_are_the_same_page_or_same_rent_and_building():
+    a = {"source_url": "u1", "title": "Tseung Kwan O · East Point City", "rent_hkd_month": 4800}
+    b = {"source_url": "u2", "title": "Hang Hau · East Point City Tower 3", "rent_hkd_month": 4800}
+    c = {"source_url": "u3", "title": "Hang Hau · Park Central", "rent_hkd_month": 4800}
+    d = {"source_url": "u4", "title": "Hung Hom · Mangrove", "rent_hkd_month": 17500, "saleable_sqft": 250}
+    e = {"source_url": "u5", "title": "Hung Hom · BAKERVIEW", "rent_hkd_month": 17500, "saleable_sqft": 335}
+    assert duplicate_homes([a, b]) == 1
+    assert duplicate_homes([a, c]) == 0  # same rent, another building
+    assert duplicate_homes([d, e]) == 0  # same district and rent is not the same home
+    assert duplicate_homes([a, {**a}]) == 1  # the same page twice
+
+
+def test_rows_labelled_with_an_ablation_must_have_run_with_it():
+    rows = [
+        {"system": "flatjai", "case": "a"},
+        {"system": "b1", "case": "a"},
+        {"system": "flatjai-no_reflect", "case": "a", "ablate": ["no_reflect"]},
+        {"system": "flatjai-no_dedup", "case": "b"},  # recorded before runs stored their ablation
+        {"system": "flatjai-model_facts", "case": "c", "ablate": []},  # the cached-settings bug
+    ]
+    assert ablation_mismatches(rows) == ["flatjai-model_facts/c", "flatjai-no_dedup/b"]
