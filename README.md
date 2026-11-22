@@ -122,7 +122,7 @@ The full design (data flow, storage, resume, tracing, code map) is in
 ## Set up and run
 
 ```bash
-git clone https://github.com/BhanuRana/flatjai.git
+git clone https://github.com/flatjai/flatjai.git
 cd flatjai
 ./setup.sh        # once: asks where the model runs, TACC (recommended) or this machine
 ./run.sh app      # then open http://localhost:3000
@@ -278,7 +278,7 @@ curl -fsSL https://ollama.com/install.sh | sh    # only for the model on this ma
 ## Setup (one command)
 
 ```bash
-git clone https://github.com/BhanuRana/flatjai.git
+git clone https://github.com/flatjai/flatjai.git
 cd flatjai
 ./setup.sh
 ```
