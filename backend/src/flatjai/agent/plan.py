@@ -2,7 +2,8 @@
 
 The model chooses areas and wording (typed call plan_search). Code keeps it honest: queries already
 tried are dropped, at most MAX_QUERIES per round, and if the call fails we fall back to the
-deterministic plan (campus areas). CAMPUS_AREAS is a hint until M3 brings real commute isochrones.
+deterministic plan (campus areas). CAMPUS_AREAS are the areas within reach of each campus, a hint
+for where to search; the commute itself is routed per home.
 """
 
 from pydantic import BaseModel, Field

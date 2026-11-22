@@ -2,7 +2,7 @@
 
 Hard constraints are checked in code, never by the model, so "fits your budget" is always true.
 A fact the listing does not state is "unknown" (ok=None): shown to the student, not a rejection.
-Commute joins the checks in M3.
+Commute: a coarse area check first, replaced by the routed journey once the home is placed.
 """
 
 import json
@@ -84,8 +84,8 @@ def hard_checks(listing: Listing, cost: Cost, profile: Profile) -> list[Check]:
 
 
 def area_check(listing: Listing, profile: Profile) -> Check | None:
-    """Interim commute check until M3 routes real journeys: with a commute limit, a home in a known
-    district outside the areas within reach of the campus fails. Missing one home is better than
+    """Coarse commute check before a journey is routed: with a commute limit, a home in a known
+    district outside the areas within reach of the campus fails (with_commute replaces it). Missing one home is better than
     showing one 90 minutes away. Unknown district -> unknown."""
     areas = candidate_areas(profile)
     if not profile.max_commute_min or not areas:
@@ -291,7 +291,7 @@ def promise(preview: ListingPreview | None, profile: Profile) -> int:
 def with_commute(
     checks: list[Check], minutes: int, summary: str, profile: Profile, precision: str
 ) -> list[Check]:
-    """The commute estimate replaces the interim area check. With a limit it is a hard check;
+    """The routed commute replaces the coarse area check. With a limit it is a hard check;
     an area-level location (the district, not the building) is marked as such in the detail."""
     rest = [c for c in checks if c.name != "area"]
     where = "" if precision == "building" else " (from the district; building not found)"
