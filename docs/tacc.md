@@ -1,13 +1,16 @@
-# TACC: FlatJai on Qwen3.8-27B
+# TACC: FlatJai's model on the course GPUs
 
-The course serves Qwen3.8-27B (AWQ INT4, vLLM, 2 GPUs, 32K context, 4 concurrent requests, model name
-`qwen3.8-27b`) as a TACC job whose URL (`http://<node>:8000/v1`) is reachable only inside the cluster.
-FlatJai uses it in two ways:
+FlatJai's model is **Qwen3.8-27B** (AWQ INT4, vLLM, 2 GPUs, 32K context, model name `qwen3.8-27b`),
+served by the course on TACC as a GPU job. That job's URL (`http://<node>:8000/v1`) is reachable only
+inside the cluster, so FlatJai reaches it in two ways:
 
 | Command | What runs where | Use it for |
 |---|---|---|
-| `./run.sh tacc` | the evaluation suite runs inside TACC as a CPU job next to the service | experiment E3 ([evaluation.md](evaluation.md)) |
-| `./run.sh local --tacc` | the app runs here; only model calls go to TACC, through an SSH tunnel | using the web app with 27B |
+| `./run.sh app` | the app (API, web, search, routing, Postgres) runs on your machine; only model calls go to TACC, through an SSH tunnel | using FlatJai |
+| `./run.sh suite` | the evaluation suite runs inside TACC as a CPU job next to the service | experiment E3 ([evaluation.md](evaluation.md)) |
+
+Without TACC access, Qwen3 8B on your own machine can stand in (`./setup.sh --model local`); it is
+slower and less precise, and it is the fallback, not the default.
 
 ## One-time setup
 
@@ -19,14 +22,41 @@ Needs a TACC account for the course, the HKUST network or VPN, and the course ki
    settings from `~/.tcloud/.userconfig`, so it always runs as you.
 3. Unzip the course kit (`project-release-1.zip`), run `bash setup-sdk-account.sh` from it once, and
    point `TACC_KIT` at its `qwen27b-student-release` folder (for example in your shell profile).
-4. Check: `tcloud ps` answers within a few seconds. If it hangs, the machine is not reaching the
-   TACC gateway (turn off any other VPN and connect to the HKUST network or VPN).
+4. Run `./setup.sh` and choose **1) TACC** (the default; `./setup.sh --model tacc` skips the
+   question). It sets `FJ_MODEL=tacc-tunnel` in `.env` and checks tcloud, your login, the kit and
+   that the TACC gateway answers.
 
-## The suite on 27B: `./run.sh tacc`
+If `tcloud ps` hangs, the machine is not reaching the gateway: connect to the HKUST network or VPN
+and turn off any other VPN.
+
+## The app on 27B: `./run.sh app`
 
 ```
-./run.sh tacc                                       # FlatJai, B1, B0 on 27B, scored, on the dashboard
-SYSTEMS="flatjai-model_facts" ./run.sh tacc         # an ablation on 27B
+./run.sh app                                                    # start the service, tunnel it, run the app
+./run.sh app --offline                                          # the same on the frozen snapshot only
+scripts/tacc-tunnel.sh                                          # only the service and its tunnel (for make dev, make eval)
+TACC_SERVICE_URL=http://10.0.1.11:8000/v1 scripts/tacc-tunnel.sh   # tunnel a service already running
+```
+
+`scripts/tacc-tunnel.sh`:
+
+1. submits the course's `qwen-public-serve` job (or reuses the one in `TACC_SERVICE_URL`) and reads
+   its URL from the job log;
+2. opens an SSH tunnel through the TACC gateway from `localhost:8001` to the service, as the person
+   running it (user, gateway, port and key from `~/.tcloud/.userconfig`);
+3. waits until the model answers: 4 to 7 minutes after the job starts, while vLLM loads the model,
+   with a progress line each minute.
+
+`./run.sh app` then starts the API and the web app with the `tacc-tunnel` profile
+(`backend/models.yaml`). If a tunnel is already open on `localhost:8001` it is reused. Ctrl-C stops
+the app, closes the tunnel and cancels the service job. To use another local port, set `TUNNEL_PORT`
+and change `base_url` of the `tacc-tunnel` profile to match.
+
+## The suite on 27B: `./run.sh suite`
+
+```
+./run.sh suite                                      # FlatJai, B1, B0 on 27B, scored, on the dashboard
+SYSTEMS="flatjai-model_facts" ./run.sh suite        # an ablation on 27B
 scripts/run-e3.sh                                   # the job round trip alone (no scoring)
 ```
 
@@ -43,35 +73,18 @@ How the job works:
   `qwen-python`, proxy bypass for the internal URL) running `infra/tacc/job/run.py`.
 - `run.py` (in TACC) unpacks the bundle on the node's local disk (the shared `/mnt/home` is nearly
   full), checks the imports before waiting, waits for the service, runs each system offline
-  (`FJ_OFFLINE=1`, no listing site touched) and copies results to `$TACC_USERDIR/flatjai-e3/<job>/`
-  after each system, so a job that hits its limit keeps what it finished.
-- Same conditions as the laptop runs: no OTP or SearXNG in the job; searches, geocodes and commutes
-  come from the snapshot's cache. Pages read for the first time by 27B are extracted by 27B.
-
-## The app on 27B: `./run.sh local --tacc`
-
-```
-./run.sh local --tacc                                              # start a service, tunnel it, run the app
-TACC_SERVICE_URL=http://10.0.1.11:8000/v1 scripts/tacc-tunnel.sh   # only tunnel a service already running
-```
-
-`scripts/tacc-tunnel.sh`:
-
-1. submits the course's `qwen-public-serve` job (or reuses the one in `TACC_SERVICE_URL`) and reads
-   its URL from the job log;
-2. opens an SSH tunnel through the TACC gateway from `localhost:8001` to the service, as the person
-   running it (user, gateway, port and key from `~/.tcloud/.userconfig`);
-3. waits until the model answers. `./run.sh` then starts the app with the `tacc-tunnel` profile
-   (`backend/models.yaml`), so search, OpenTripPlanner and Postgres stay on this machine.
-
-Ctrl-C stops the app, closes the tunnel and cancels the service job. To use another local port, set
-`TUNNEL_PORT` and change `base_url` of the `tacc-tunnel` profile to match.
+  (`FJ_OFFLINE=1`, no listing site touched, profile `tacc`) and copies results to
+  `$TACC_USERDIR/flatjai-e3/<job>/` after each system, so a job that hits its limit keeps what it
+  finished.
+- Same conditions as the runs on your machine: no OTP or SearXNG in the job; searches, geocodes and
+  commutes come from the snapshot's cache. Pages read for the first time by 27B are extracted by 27B.
 
 ## Limits
 
-- Service jobs end after 1 hour (cancel when done to free GPUs); a new job means a new URL. The first
-  start compiles for about 4 minutes (cached in USERDIR afterwards). Client jobs allow 55 minutes.
-- The service handles 4 requests at once and is shared by the course.
+- Service jobs end after 1 hour (cancel when done to free GPUs); a new job means a new URL. Client
+  jobs allow 55 minutes.
+- The service handles 4 requests at once and is shared by the course; a busy cluster queues the job
+  (`tcloud ps` shows it as pending).
 - The service log names its node like `10-0-1-11`, which does not resolve from other nodes; the
   scripts use the IP (`10.0.1.11`).
 - `tcloud download` takes files, not folders.

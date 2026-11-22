@@ -142,8 +142,8 @@ Does the result hold on a larger model? The same suite on the course's Qwen3.8-2
 (the service is reachable only from the cluster; see [tacc.md](tacc.md)):
 
 ```
-./run.sh tacc                                   # FlatJai, B1, B0 -> eval/results/report-tacc.md
-SYSTEMS="flatjai-model_facts" ./run.sh tacc     # the model_facts ablation on 27B
+./run.sh suite                                  # FlatJai, B1, B0 -> eval/results/report-tacc.md
+SYSTEMS="flatjai-model_facts" ./run.sh suite    # the model_facts ablation on 27B
 ```
 
 | Metric | B0 | B1 | FlatJai | FlatJai, model_facts |

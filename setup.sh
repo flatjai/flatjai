@@ -1,23 +1,28 @@
 #!/usr/bin/env bash
 # FlatJai setup: from a fresh clone to a running app, in one command. Safe to run again.
+# It asks where FlatJai's model runs: Qwen3.8-27B on TACC GPUs (recommended) or Qwen3 8B here.
 #
-#   ./setup.sh               everything: services, snapshot, commute graph, local model
-#   ./setup.sh --no-otp      skip OpenTripPlanner (needs ~4 GB for Docker); commutes use the estimate
-#   ./setup.sh --no-model    skip the local model (~5 GB download); use FJ_MODEL=tacc or replay only
+#   ./setup.sh                  everything; asks where the model runs
+#   ./setup.sh --model tacc     the model on TACC: no model download (needs tcloud, docs/tacc.md)
+#   ./setup.sh --model local    the model here: Qwen3 8B through Ollama (~5 GB download)
+#   ./setup.sh --no-otp         skip OpenTripPlanner (needs ~4 GB for Docker); commutes use the estimate
 #
-# Needs: macOS or Linux (Windows: WSL2), Docker (Desktop) running, uv, Node 20.9+ with pnpm, zstd,
-# and Ollama for the local model. The script checks each one and says how to install what is missing.
+# Needs: macOS or Linux (Windows: WSL2), Docker (Desktop) running, uv, Node 20.9+ with pnpm, zstd;
+# for TACC tcloud and a TACC account, for the model here Ollama. Each is checked, with how to install it.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-WITH_OTP=1 WITH_MODEL=1
-for arg in "$@"; do
-  case "$arg" in
+WITH_OTP=1 MODEL=""
+while [ $# -gt 0 ]; do
+  case "$1" in
     --no-otp) WITH_OTP=0 ;;
-    --no-model) WITH_MODEL=0 ;;
-    -h|--help) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *) echo "unknown option: $arg (try --help)"; exit 2 ;;
+    --model) shift; MODEL=${1:-} ;;
+    --model=*) MODEL=${1#--model=} ;;
+    --no-model) MODEL=tacc ;;   # older flag: no model download here
+    -h|--help) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "unknown option: $1 (try --help)"; exit 2 ;;
   esac
+  shift
 done
 
 bold=$'\033[1m' green=$'\033[32m' yellow=$'\033[33m' red=$'\033[31m' off=$'\033[0m'
@@ -28,6 +33,33 @@ die()  { printf '%s  x%s  %s\n' "$red" "$off" "$*"; exit 1; }
 has()  { command -v "$1" >/dev/null 2>&1; }
 mac()  { [ "$(uname)" = Darwin ]; }
 hint() { if mac; then echo "brew install $1"; else echo "$2"; fi; }
+
+# --- 0. where the model runs ------------------------------------------------------------------
+current=$(sed -n 's/^FJ_MODEL=//p' .env 2>/dev/null | tail -1 || true)
+if [ -z "$MODEL" ]; then
+  default=tacc; [ "$current" = local ] && default=local
+  if [ -t 0 ]; then
+    printf '\n%sWhere should FlatJai'"'"'s model run?%s\n' "$bold" "$off"
+    echo "  1) TACC   Qwen3.8-27B on the course GPUs (recommended). Nothing to download; needs a TACC"
+    echo "            account, tcloud and the HKUST network or VPN (docs/tacc.md). About 20 s per brief."
+    echo "  2) Here   Qwen3 8B on this machine through Ollama: a ~5 GB download and 16 GB of RAM."
+    echo "            For working without TACC access; slower and less precise than 27B."
+    d=1; [ "$default" = local ] && d=2
+    read -r -p "Choose 1 or 2 [$d]: " answer || answer=""
+    case "${answer:-$d}" in
+      1|tacc|TACC) MODEL=tacc ;;
+      2|here|local) MODEL=local ;;
+      *) die "please answer 1 or 2" ;;
+    esac
+  else
+    MODEL=$default   # not interactive: keep the earlier choice, else TACC
+  fi
+fi
+case "$MODEL" in
+  tacc|local) ;;
+  *) die "--model takes tacc or local, not '$MODEL'" ;;
+esac
+if [ "$MODEL" = tacc ]; then ok "model: Qwen3.8-27B on TACC"; else ok "model: Qwen3 8B on this machine (Ollama)"; fi
 
 # --- 1. tools ---------------------------------------------------------------------------------
 step "Checking tools"
@@ -40,8 +72,8 @@ need uv "curl -LsSf https://astral.sh/uv/install.sh | sh"
 need node "$(hint node 'https://nodejs.org (20.9 or newer)')"
 need zstd "$(hint zstd 'sudo apt install zstd')"
 need curl "$(hint curl 'sudo apt install curl')"
-if [ "$WITH_MODEL" = 1 ]; then
-  need ollama "$(hint ollama 'curl -fsSL https://ollama.com/install.sh | sh')  (or rerun with --no-model)"
+if [ "$MODEL" = local ]; then
+  need ollama "$(hint ollama 'curl -fsSL https://ollama.com/install.sh | sh')  (or use TACC: ./setup.sh --model tacc)"
 fi
 [ "$missing" = 0 ] || die "install the tools above, then run ./setup.sh again"
 
@@ -79,12 +111,24 @@ done
 # --- 2. configuration -------------------------------------------------------------------------
 step "Configuration (.env)"
 if [ -f .env ]; then
-  ok ".env exists, left as it is"
+  ok ".env exists, kept"
 else
   cp .env.example .env
-  # a laptop model reads a page in ~20 s: give each brief 4 minutes instead of the 90 s TACC target
-  sed -i.bak 's/^RUN_MAX_SECONDS=.*/RUN_MAX_SECONDS=240/' .env && rm -f .env.bak
-  ok "created .env from .env.example (RUN_MAX_SECONDS=240 for a laptop model)"
+  ok "created .env from .env.example"
+fi
+setenv() {  # setenv KEY VALUE: set or add a line in .env
+  if grep -q "^$1=" .env; then sed -i.bak "s|^$1=.*|$1=$2|" .env && rm -f .env.bak; else echo "$1=$2" >> .env; fi
+}
+if [ "$MODEL" = tacc ]; then
+  setenv FJ_MODEL tacc-tunnel
+  # 27B extracts each page itself the first time it reads it: allow 4 minutes, as the E3 runs did
+  setenv RUN_MAX_SECONDS 240
+  ok "FJ_MODEL=tacc-tunnel, RUN_MAX_SECONDS=240 (Qwen 27B on TACC)"
+else
+  setenv FJ_MODEL local
+  # a laptop model reads a page in ~20 s: give each brief 4 minutes instead of the 90 s target
+  setenv RUN_MAX_SECONDS 240
+  ok "FJ_MODEL=local, RUN_MAX_SECONDS=240 (Qwen 8B here)"
 fi
 if [ "$WITH_OTP" = 0 ] && grep -q '^OTP_URL=' .env; then
   sed -i.bak 's/^OTP_URL=/# OTP_URL=/' .env && rm -f .env.bak
@@ -136,8 +180,33 @@ if [ "$WITH_OTP" = 1 ]; then
   ok "otp :8080"
 fi
 
-# --- 6. local model ---------------------------------------------------------------------------
-if [ "$WITH_MODEL" = 1 ]; then
+# --- 6. the model ----------------------------------------------------------------------------
+if [ "$MODEL" = tacc ]; then
+  step "TACC (Qwen3.8-27B on the course GPUs)"
+  tacc_ok=1
+  if has tcloud; then ok "tcloud $(command -v tcloud)"; else warn "tcloud missing: install it from the course (docs/tacc.md, step 1)"; tacc_ok=0; fi
+  if [ -f "$HOME/.tcloud/.userconfig" ]; then
+    ok "tcloud configured for $(python3 -c 'import json,os;print(json.load(open(os.path.expanduser("~/.tcloud/.userconfig")))["UserName"])' 2>/dev/null || echo '?')"
+  else
+    warn "tcloud not configured: tcloud config -u <TACC user> -f <TACC SSH key> && tcloud init"; tacc_ok=0
+  fi
+  kit=${TACC_KIT:-$HOME/Work/ust/coursework/Adv-AI-Computing-And-Systems-CSIT6000V/project/tacc-kit/qwen27b-student-release}
+  if [ -d "$kit/qwen-public-serve" ]; then ok "course kit at $kit"; else warn "course kit not found: unzip it and set TACC_KIT to its qwen27b-student-release folder"; tacc_ok=0; fi
+  if [ "$tacc_ok" = 1 ]; then
+    tcloud ps >/dev/null 2>&1 &
+    tc=$!
+    for _ in $(seq 1 20); do kill -0 "$tc" 2>/dev/null || break; sleep 1; done
+    if kill -0 "$tc" 2>/dev/null; then
+      kill "$tc" 2>/dev/null || true
+      warn "the TACC gateway does not answer: connect to the HKUST network or VPN (and turn off any other VPN)"
+    else
+      ok "the TACC gateway answers"
+    fi
+  else
+    warn "finish the TACC setup in docs/tacc.md, then run ./setup.sh again (or ./setup.sh --model local)"
+  fi
+fi
+if [ "$MODEL" = local ]; then
   step "Local model (Ollama, qwen3:8b with a 16K context)"
   if ! curl -sf -m 3 http://localhost:11434/api/tags >/dev/null; then
     if mac && has brew; then brew services start ollama >/dev/null 2>&1 || true; else (ollama serve >/dev/null 2>&1 &); fi
@@ -162,19 +231,17 @@ step "Tests (no model, network or database needed)"
 (cd backend && uv run --frozen pytest -q 2>&1 | tail -1)
 
 # --- done -------------------------------------------------------------------------------------
+if [ "$MODEL" = tacc ]; then model_note="Qwen 27B on TACC; about 5 min to start the GPU job"; else model_note="Qwen 8B on this machine"; fi
 cat <<EOF
 
-${bold}${green}FlatJai is set up.${off} Run each in its own terminal:
+${bold}${green}FlatJai is set up.${off}
 
-  make dev        API on http://localhost:8000/docs
-  make web        UI on  http://localhost:3000
-  Grafana         metrics on http://localhost:3001 (make obs refreshes the TACC and eval data)
-
-  FJ_OFFLINE=1 make dev   the frozen snapshot only: no listing site is contacted
-  make eval               the query suite on the snapshot (B0, B1, FlatJai) -> eval/results/report.md
+  ./run.sh app              the app on http://localhost:3000 (${model_note})
+  ./run.sh app --offline    the same on the frozen snapshot only: no listing site is contacted
+  ./run.sh suite            the evaluation suite on Qwen 27B inside TACC -> eval/results/report-tacc.md
+  Grafana                   metrics on http://localhost:3001
 
 Stop the services with: make down   (data stays in the Docker volume)
 EOF
-[ "$WITH_MODEL" = 0 ] && echo "No local model: set FJ_MODEL=tacc in .env (see README) before 'make dev'."
 [ "$WITH_OTP" = 0 ] && echo "No OpenTripPlanner: commutes are offline estimates. './setup.sh' again adds it later."
 exit 0

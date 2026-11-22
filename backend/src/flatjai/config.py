@@ -13,7 +13,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=BACKEND_DIR.parent / ".env", extra="ignore")
 
-    fj_model: str = "local"
+    fj_model: str = "tacc-tunnel"
     database_url: str = "postgresql+psycopg://flatjai:flatjai@localhost:5432/flatjai"
     models_file: Path = BACKEND_DIR / "models.yaml"
 

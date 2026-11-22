@@ -1,11 +1,11 @@
 .PHONY: up down otp-data otp-graph model migrate dev web test lint check-model eval-understand ablate \
-	snapshot snapshot-import eval eval-score obs local tacc
+	snapshot snapshot-import eval eval-score obs local tacc app suite model-ready
 
-local:         ## run the app here: services, API and web in one terminal (OFFLINE=1: snapshot only)
-	./run.sh local $(if $(filter 1,$(OFFLINE)),--offline)
+app local:     ## the app: services, API and web, the model chosen at setup (OFFLINE=1: snapshot; MODEL=tacc|local)
+	./run.sh app $(if $(filter 1,$(OFFLINE)),--offline) $(if $(MODEL),--model $(MODEL))
 
-tacc:          ## the evaluation suite on Qwen 27B inside TACC, scored and loaded into the dashboard
-	./run.sh tacc
+suite tacc:    ## the evaluation suite on Qwen 27B inside TACC, scored and loaded into the dashboard
+	./run.sh suite
 
 up:            ## start Postgres, SearXNG and Grafana (and OpenTripPlanner once its graph is built)
 	docker compose $(if $(wildcard infra/otp/data/graph.obj),--profile otp) up -d --wait
@@ -29,7 +29,7 @@ model:         ## build the local model (qwen3:8b with a 16K context window)
 migrate:       ## apply database migrations (Alembic)
 	cd backend && uv run alembic upgrade head
 
-dev: migrate   ## run the backend with reload on :8000 (interrupted runs resume on start)
+dev: migrate model-ready   ## run the backend with reload on :8000 (interrupted runs resume on start)
 	cd backend && uv run uvicorn flatjai.api:app --reload --port 8000
 
 web:           ## run the UI on :3000 (needs `make up`, `make dev` and a model server)
@@ -42,10 +42,10 @@ lint:
 	cd backend && uv run ruff check src tests && uv run ruff format --check src tests
 	cd web && pnpm lint && pnpm exec tsc --noEmit
 
-check-model:   ## a typed call to the active model returns a valid Profile
+check-model: model-ready   ## a typed call to the active model returns a valid Profile
 	cd backend && uv run python -m flatjai.check_model
 
-eval-understand: ## Understand stage on the active model: briefs -> expected profile fields
+eval-understand: model-ready ## Understand stage on the active model: briefs -> expected profile fields
 	cd backend && uv run python ../eval/understand_check.py
 
 SNAPSHOT ?= $(lastword $(sort $(wildcard data/snapshot-*.tar.zst)))
@@ -57,14 +57,14 @@ snapshot-import: ## load the frozen snapshot (SNAPSHOT=file, default: the newest
 
 SYSTEMS ?= b0 b1 flatjai
 REPEAT ?= 1
-eval:          ## the query suite on the frozen snapshot (offline) for each system, then the report
+eval: model-ready   ## the query suite on the frozen snapshot (offline) for each system, then the report
 	@for s in $(SYSTEMS); do \
 		(cd backend && FJ_OFFLINE=1 uv run python ../eval/run_suite.py --system $$s --repeat $(REPEAT) --tag offline) || exit 1; \
 	done
 	$(MAKE) eval-score
 
 ABLATIONS ?= no_reflect no_dedup model_facts
-ablate:        ## E2: the suite offline with one agent part off at a time, then the report with E1
+ablate: model-ready ## E2: the suite offline with one agent part off at a time, then the report with E1
 	@for a in $(ABLATIONS); do \
 		(cd backend && FJ_OFFLINE=1 uv run python ../eval/run_suite.py --system flatjai --ablate $$a --repeat $(REPEAT) --tag offline) || exit 1; \
 	done
@@ -75,3 +75,14 @@ eval-score:    ## score the latest offline result of each system -> eval/results
 
 obs:           ## load TACC runs and eval scores for the Grafana dashboard -> http://localhost:3001
 	cd backend && uv run python ../infra/grafana/load.py
+
+# The model these targets use: FJ_MODEL from the environment, else .env. With tacc-tunnel (Qwen 27B on
+# TACC) the tunnel must be open; ./run.sh app opens it, or run scripts/tacc-tunnel.sh in another terminal.
+ACTIVE_MODEL = $(or $(FJ_MODEL),$(shell sed -n 's/^FJ_MODEL=//p' .env 2>/dev/null | tail -1),tacc-tunnel)
+model-ready:
+	@if [ "$(ACTIVE_MODEL)" = tacc-tunnel ] && ! curl -s -m 5 http://localhost:8001/v1/models | grep -q qwen3.8-27b; then \
+		echo "Qwen 27B on TACC is not reachable on localhost:8001."; \
+		echo "  Open the tunnel in another terminal: scripts/tacc-tunnel.sh (about 5 min to start the GPU job)"; \
+		echo "  or use the model on this machine:     FJ_MODEL=local make $(MAKECMDGOALS)"; \
+		exit 1; fi
+

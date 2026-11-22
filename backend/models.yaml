@@ -1,4 +1,6 @@
 # Model profiles. The orchestrator never knows which one it talks to.
+# FlatJai's model is Qwen3.8-27B on TACC: `tacc-tunnel` from your machine (./run.sh app), `tacc` inside a
+# TACC job (./run.sh suite). `local` (Qwen3 8B through Ollama) is the fallback without TACC access.
 # extra_body turns off Qwen3 "thinking" for typed calls: the JSON schema already structures the answer,
 # and thinking costs ~1,000 tokens (60+ s on a laptop) per call.
 models:

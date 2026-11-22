@@ -14,7 +14,7 @@ flowchart TB
     web -->|POST /runs| api[API<br/>FastAPI, :8000]
     api -.->|SSE: state, progress, card, done| web
     api --> agent[Agent loop<br/>7 stages]
-    agent -->|typed calls| model[(Model<br/>Qwen 8B on Ollama<br/>or Qwen 27B on vLLM)]
+    agent -->|typed calls| model[(Qwen 27B on TACC GPUs<br/>vLLM, via SSH tunnel)]
     agent --> tools
     agent --> pg[(Postgres<br/>runs, events, spans,<br/>pages, listings, cache)]
     subgraph tools [Tools]
@@ -27,11 +27,12 @@ flowchart TB
     grafana[Grafana, :3001] -->|read-only views| pg
 ```
 
-Everything runs on one machine with free components: Postgres, SearXNG, OpenTripPlanner and Grafana
-in Docker (`compose.yaml`), the model in Ollama, the API and UI started together by `./run.sh local`.
-The same code runs against Qwen3.8-27B on TACC: the suite as a TACC job (`./run.sh tacc`), or the
-app here with the model forwarded through an SSH tunnel (`./run.sh local --tacc`, profile
-`tacc-tunnel`). See [tacc.md](tacc.md).
+FlatJai's model is Qwen3.8-27B, served by the course on TACC GPUs (vLLM). Everything else runs on
+one machine with free components: Postgres, SearXNG, OpenTripPlanner and Grafana in Docker
+(`compose.yaml`), the API and the web app. `./run.sh app` starts them together with the model's TACC
+job and an SSH tunnel that forwards it to `localhost:8001` (profile `tacc-tunnel`); the evaluation
+runs as a TACC job next to the service (`./run.sh suite`, profile `tacc`). Without TACC access,
+Qwen3 8B through Ollama on the same machine stands in (profile `local`). See [tacc.md](tacc.md).
 
 ## One run, end to end
 
@@ -129,8 +130,9 @@ snapshot of the market (`data/snapshot-*.tar.zst`) and never touches a listing s
 `model_client.py` is the only way to call a model. `typed_call()` sends a JSON schema generated from
 a Pydantic class, validates the reply and gives the model one repair retry with the validation
 error. It speaks the OpenAI-compatible API, so Ollama, LM Studio and vLLM all work; profiles live
-in `backend/models.yaml`: `local` (Qwen3 8B, 16K context, thinking off), `tacc` (Qwen3.8-27B,
-AWQ INT4 on 2 GPUs, used inside TACC) and `tacc-tunnel` (the same service through the tunnel).
+in `backend/models.yaml`: `tacc-tunnel` (Qwen3.8-27B, AWQ INT4 on 2 GPUs, through the tunnel; the
+default), `tacc` (the same service from inside a TACC job) and `local` (Qwen3 8B, 16K context,
+thinking off, through Ollama; the fallback without TACC).
 
 ## Storage
 

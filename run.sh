@@ -1,64 +1,102 @@
 #!/usr/bin/env bash
-# Run FlatJai locally, or run its evaluation on Qwen 27B on TACC. (First time: ./setup.sh)
+# Run FlatJai. Its model is Qwen3.8-27B on TACC GPUs; Qwen3 8B on this machine is the fallback.
+# (First time: ./setup.sh, which asks where the model runs.)
 #
-#   ./run.sh local              the app on this machine: services, API and web in one terminal
-#   ./run.sh local --offline    the same, answering from the frozen snapshot only (no listing site)
-#   ./run.sh local --tacc       the app here, with Qwen 27B on TACC through an SSH tunnel (VPN needed)
-#   ./run.sh tacc               the evaluation suite on Qwen 27B inside TACC, scored and on the dashboard
-#   SYSTEMS="flatjai flatjai-model_facts" ./run.sh tacc     choose systems (default: flatjai b1 b0)
+#   ./run.sh app                  the app: services, API and web here, the model chosen at setup
+#                                 (TACC: starts the 27B service and tunnels it here, ~5 min)
+#   ./run.sh app --offline        the same, answering from the frozen snapshot only (no listing site)
+#   ./run.sh app --model tacc     this run on Qwen 27B on TACC, whatever setup chose
+#   ./run.sh app --model local    this run on Qwen 8B on this machine (Ollama), whatever setup chose
+#   ./run.sh suite                the evaluation suite on Qwen 27B inside TACC, scored, on the dashboard
+#   SYSTEMS="flatjai flatjai-model_facts" ./run.sh suite    choose systems (default: flatjai b1 b0)
 #
-# Why "tacc" runs the suite and not the app: the course's 27B service is reachable only from inside
-# the cluster, so FlatJai goes to it as a TACC job (docs/tacc.md) instead of the model coming here.
+# Older names still work: "local" for app, "tacc" for suite, "--tacc" for "--model tacc".
 set -euo pipefail
 cd "$(dirname "$0")"
 
 bold=$'\033[1m' green=$'\033[32m' red=$'\033[31m' off=$'\033[0m'
 say() { printf '%s==> %s%s\n' "$bold" "$*" "$off"; }
 die() { printf '%sx  %s%s\n' "$red" "$*" "$off"; exit 1; }
-usage() { sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; }
 
 mode=${1:-}
 [ -n "$mode" ] || { usage; exit 2; }
 shift || true
 
-# --- local: Docker services + API + web, stopped together with Ctrl-C ------------------------
-run_local() {
-  local offline=0 tacc=0
-  for arg in "$@"; do
-    case "$arg" in
+# the profile setup.sh wrote to .env: tacc-tunnel (TACC) or local (Ollama)
+env_model() { sed -n 's/^FJ_MODEL=//p' .env 2>/dev/null | tail -1; }
+
+# --- app: Docker services + (TACC tunnel) + API + web, stopped together with Ctrl-C ------------
+run_app() {
+  local offline=0 model=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
       --offline) offline=1 ;;
-      --tacc) tacc=1 ;;
-      *) die "unknown option for local: $arg" ;;
+      --tacc) model=tacc ;;
+      --model) shift; model=${1:-} ;;
+      --model=*) model=${1#--model=} ;;
+      *) die "unknown option for app: $1 (try ./run.sh)" ;;
     esac
+    shift
   done
   [ -f .env ] && [ -d backend/.venv ] && [ -d web/node_modules ] || die "not set up yet: run ./setup.sh first"
+  if [ -z "$model" ]; then
+    case "$(env_model)" in
+      local) model=local ;;
+      *) model=tacc ;;
+    esac
+  fi
+  case "$model" in
+    tacc|local) ;;
+    *) die "--model takes tacc or local, not '$model'" ;;
+  esac
+
   docker info >/dev/null 2>&1 || die "Docker is not running: start Docker Desktop and try again"
-  for port in 8000 3000; do
+  # a tunnel already open (scripts/tacc-tunnel.sh in another terminal) is reused, not started again
+  local reuse=0
+  if [ "$model" = tacc ] && curl -s -m 5 "http://localhost:${TUNNEL_PORT:-8001}/v1/models" 2>/dev/null | grep -q qwen3.8-27b; then
+    reuse=1
+  fi
+  local ports="8000 3000"
+  [ "$model" = tacc ] && [ "$reuse" = 0 ] && ports="$ports ${TUNNEL_PORT:-8001}"
+  for port in $ports; do
     if lsof -iTCP:"$port" -sTCP:LISTEN -Pn >/dev/null 2>&1; then
-      die "port $port is already in use (a make dev or make web still running?)"
+      die "port $port is already in use (an earlier run, make dev or make web still running?)"
     fi
   done
-  if [ "$tacc" = 0 ] && grep -q '^FJ_MODEL=local' .env && ! curl -s -o /dev/null http://localhost:11434/api/tags; then
-    die "Ollama is not running: open the Ollama app (or 'ollama serve') and try again"
+  if [ "$model" = local ] && ! curl -s -o /dev/null http://localhost:11434/api/tags; then
+    die "Ollama is not running: open the Ollama app (or 'ollama serve'), or use the TACC model: ./run.sh app --model tacc"
+  fi
+  if [ "$model" = tacc ] && [ "$reuse" = 0 ]; then
+    command -v tcloud >/dev/null || die "tcloud not found: TACC needs the one-time setup in docs/tacc.md (or ./run.sh app --model local)"
   fi
 
   say "Starting Postgres, SearXNG, Grafana (and OpenTripPlanner if built)"
   make -s up
 
-  # one process group: Ctrl-C (or either server exiting) stops both
-  trap 'trap - INT TERM EXIT; printf "\nStopping API and web (Docker services keep running: make down)\n"; kill 0 2>/dev/null' INT TERM EXIT
-  if [ "$tacc" = 1 ]; then
+  # one process group: Ctrl-C (or either server exiting) stops everything, and the tunnel's own
+  # handler cancels the TACC service job
+  trap 'trap - INT TERM EXIT; printf "\nStopping (Docker services keep running: make down)\n"; kill 0 2>/dev/null' INT TERM EXIT
+
+  if [ "$model" = tacc ] && [ "$reuse" = 1 ]; then
+    export FJ_MODEL=tacc-tunnel
+    say "Model: Qwen3.8-27B on TACC, through the tunnel already open on localhost:${TUNNEL_PORT:-8001}"
+  elif [ "$model" = tacc ]; then
     local port=${TUNNEL_PORT:-8001}
-    say "Starting Qwen 27B on TACC and tunnelling it to localhost:$port (scripts/tacc-tunnel.sh)"
+    say "Starting Qwen 27B on TACC and tunnelling it to localhost:$port (about 5 minutes)"
     scripts/tacc-tunnel.sh &
     local tunnel=$!
-    until curl -s -m 5 "http://localhost:$port/v1/models" | grep -q qwen3.8-27b; do
+    until curl -s -m 5 "http://localhost:$port/v1/models" 2>/dev/null | grep -q qwen3.8-27b; do
       kill -0 "$tunnel" 2>/dev/null || die "the TACC tunnel stopped: see the [tunnel] lines above"
       sleep 5
     done
     export FJ_MODEL=tacc-tunnel
-    say "Model: Qwen 27B on TACC (the service job lasts 1 h)"
+    say "Model: Qwen3.8-27B on TACC (the service job lasts 1 h)"
+  else
+    export FJ_MODEL=local
+    say "Model: Qwen3 8B on this machine (Ollama)"
   fi
+
   local env_offline=""
   [ "$offline" = 1 ] && env_offline="FJ_OFFLINE=1" && say "Offline: answers come from the frozen snapshot only"
   (env $env_offline make -s dev 2>&1 | awk '{print "\033[36m[api]\033[0m " $0; fflush()}') &
@@ -72,7 +110,7 @@ run_local() {
   curl -s -o /dev/null http://localhost:8000/health || die "the API did not start: see the [api] lines above"
   cat <<EOF
 
-${green}${bold}FlatJai is running.${off} Ctrl-C stops it.
+${green}${bold}FlatJai is running.${off} Ctrl-C stops it$([ "$model" = tacc ] && [ "$reuse" = 0 ] && printf ' and cancels the TACC job').
 
   App        http://localhost:3000
   Metrics    http://localhost:3001
@@ -82,9 +120,9 @@ EOF
   wait
 }
 
-# --- tacc: the suite on Qwen 27B inside TACC, then the score and the dashboard ----------------
-run_tacc() {
-  [ $# -eq 0 ] || die "tacc takes no options; choose systems with SYSTEMS=\"...\""
+# --- suite: the evaluation on Qwen 27B inside TACC, then the score and the dashboard -----------
+run_suite() {
+  [ $# -eq 0 ] || die "suite takes no options; choose systems with SYSTEMS=\"...\""
   command -v tcloud >/dev/null || die "tcloud not found: see docs/tacc.md (one-time setup)"
   docker info >/dev/null 2>&1 || die "Docker is not running: the bundle reads the snapshot from Postgres"
   make -s up >/dev/null
@@ -105,8 +143,8 @@ run_tacc() {
 }
 
 case "$mode" in
-  local) run_local "$@" ;;
-  tacc) run_tacc "$@" ;;
+  app|local) run_app "$@" ;;
+  suite|tacc) run_suite "$@" ;;
   -h|--help|help) usage ;;
   *) usage; exit 2 ;;
 esac
