@@ -15,11 +15,11 @@ on an actual bus and MTR route, where the listing came from, and why it fits.
     <td colspan="2">Write what you need in plain words, or start from an example.</td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/live-progress.png" alt="FlatJai working through a brief: understood, planned, searched, read 22 listings, 4 homes fit"></td>
-    <td width="50%"><img src="docs/images/commute-map.png" alt="A shortlisted room: HK$5,100 a month, 38 minutes to HKUST, its route on a map, every limit checked"></td>
+    <td width="50%"><img src="docs/images/live-progress.png" alt="FlatJai on Qwen 27B working through a brief: understood it, planned a second round of searches, searched 18 times, read 16 listings, 4 homes fit"></td>
+    <td width="50%"><img src="docs/images/commute-map.png" alt="The top result: a room in Hang Hau at HK$7,300 a month, 17 minutes to HKUST by bus 91B, its route on a map, HK$25,550 to move in, budget, room and commute checked"></td>
   </tr>
   <tr>
-    <td>Every step is streamed live while it reads the market.</td>
+    <td>Every step is streamed live while it reads the market. Here on Qwen 27B on TACC: 19 s for this brief.</td>
     <td>A result: rent, real cost to move in, the route to campus, and which of your limits it meets.</td>
   </tr>
 </table>
@@ -471,9 +471,11 @@ valid structured output.
 
 ## See what the agent did
 
-Every stage, model call and tool call is recorded. Open **Inspect** on any answer to see one run:
+Every stage, model call and tool call is recorded. Open **Inspect** on any answer to see one run.
+This one is the brief above on Qwen 27B on TACC: 19 s, 5 model calls, with the pages already read
+once (its first run, which fetched and read every page, took 76 s with 19 model calls):
 
-![Run inspector: each stage, model call and tool call on a timeline, with timings and tokens](docs/images/run-inspector.png)
+![Run inspector for a run on qwen3.8-27b: 19 s, 5 model calls, 89 tool calls, each stage, model call and tool call on a timeline](docs/images/run-inspector.png)
 
 The **Metrics** dashboard (Grafana, http://localhost:3001) covers every run, with Qwen 8B and 27B
 side by side: outcomes, time per brief and per stage, model and tool latency, cache hits, and the
