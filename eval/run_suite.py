@@ -1,6 +1,6 @@
 """Run the query suite (eval/suite.yaml) on one system and write one JSON line per case.
 
-Systems:
+Systems (experiment E1):
   flatjai  the full agent, through the same RunManager the API uses (every turn, in order)
   b1       one search with the brief, read the top pages, one model call writes the shortlist
   b0       the model alone: one call, no tools

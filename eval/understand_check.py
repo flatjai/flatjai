@@ -1,6 +1,6 @@
 """Understand-stage check against the active model: each brief must parse to the expected fields.
 
-The seed of the M4 query suite. Run: make eval-understand
+The seed of the query suite. Run: make eval-understand
 """
 
 import asyncio

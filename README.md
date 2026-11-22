@@ -21,7 +21,7 @@ top pages, one answer). A scorer checks every shown home in its own code. Result
 CI runs the tests and lint on every push.
 E2: ablations (`make ablate`) show what each part earns: without the cost tool and router the model
 understates every cost and 24% of shown homes break a limit; without re-planning fewer briefs end well.
-E3: the same suite on Qwen3.8-27B on TACC (`scripts/run-e3.sh`, `deploy/tacc/README.md`): 100% of
+E3: the same suite on Qwen3.8-27B on TACC (`scripts/run-e3.sh`, `docs/tacc.md`): 100% of
 shown homes within limits, 0% invented facts, 19 s per brief.
 Observability: a Grafana dashboard (`make obs`, http://localhost:3001) over the same traces: runs,
 time per stage, model and tool calls, cache hits and the scored suite, 8B and 27B side by side.
@@ -62,7 +62,7 @@ API: `POST /runs {brief, client_key, session_id?}` -> run and session ids; `GET 
 streams `state`, `progress`, `card` and one of `done`/`clarify`/`error` (resumes with `Last-Event-ID`);
 `GET /runs/{id}/trace` returns the spans. A reply or refinement is a new run in the same session.
 
-Evaluate on the frozen snapshot (no network; see `eval/README.md`):
+Evaluate on the frozen snapshot (no network; see `docs/evaluation.md`):
 
 ```bash
 make snapshot-import    # load data/snapshot-<date>.tar.zst into Postgres
@@ -70,7 +70,7 @@ make eval               # B0, B1 and FlatJai over the suite, then eval/results/r
 make eval SYSTEMS=flatjai REPEAT=3
 ```
 
-Qwen 27B on TACC: `scripts/run-e3.sh` runs the suite inside TACC (the service URL is cluster-internal); see `deploy/tacc/README.md`.
+Qwen 27B on TACC: `scripts/run-e3.sh` runs the suite inside TACC (the service URL is cluster-internal); see `docs/tacc.md`.
 
 ## Layout
 | Path | What |
@@ -80,9 +80,9 @@ Qwen 27B on TACC: `scripts/run-e3.sh` runs the suite inside TACC (the service UR
 | `data/` | the frozen snapshot (`snapshot-<date>.tar.zst`) |
 | `eval/` | query suite, baselines, scorer, results |
 | `scripts/` | snapshot export and import, E2 and E3 runners (`run-e2.sh`, `run-e3.sh`) |
-| `deploy/tacc/` | TACC bundle and client job for the 27B runs |
-| `deploy/grafana/` | observability dashboard: data source, `build_dashboard.py` -> `dashboards/flatjai.json` |
-| `deploy/searxng/` | SearXNG settings (JSON API on) |
+| `infra/tacc/` | TACC bundle and client job for the 27B runs |
+| `infra/grafana/` | observability dashboard: data source, `build_dashboard.py` -> `dashboards/flatjai.json` |
+| `infra/searxng/` | SearXNG settings (JSON API on) |
 | `docs/` | decisions (`decisions/`) and `BUILD_LOG.md` |
 
 ## Backend modules

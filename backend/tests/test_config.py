@@ -22,3 +22,12 @@ def test_tacc_without_url_file_explains_what_to_do(tmp_path):
     f.write_text("models:\n  tacc: {base_url_file: missing.txt, model: q}\n")
     with pytest.raises(FileNotFoundError, match="SERVICE_BASE_URL"):
         load_profile("tacc", f)
+
+
+def test_profile_placeholders_mean_unknown():
+    from flatjai.schemas import Profile
+
+    p = Profile.model_validate({"budget_hkd_month": 0, "campus": "", "bedrooms": 0, "lease_months": 0})
+    assert p.budget_hkd_month is None and p.campus is None and p.lease_months is None
+    assert p.bedrooms == 0  # a studio
+    assert p.missing() == ["budget_hkd_month", "campus", "move_in"]

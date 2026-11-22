@@ -1,4 +1,5 @@
 """typed_call against a fake OpenAI client: no model or network needed."""
+
 from types import SimpleNamespace
 
 import pytest
@@ -51,3 +52,41 @@ async def test_fails_visibly_after_second_bad_reply():
     with pytest.raises(ValidationError):
         await mc.typed_call("x", "s", "u", Profile)
     assert mc.calls[0].error
+
+
+async def test_broken_json_syntax_also_gets_the_repair_retry():
+    mc, _ = client_with('{"campus": "HKUST"', '{"campus": "HKUST"}')
+    assert (await mc.typed_call("x", "s", "u", Profile)).campus == "HKUST"
+    assert mc.calls[0].attempts == 2
+
+
+async def test_runaway_output_is_retried_without_feeding_it_back():
+    fake = FakeCompletions(['{"campus": "HKUST"' + " " * 50, '{"campus": "HKUST"}'])
+    reasons = iter(["length", "stop"])
+    original = fake.create
+
+    async def create(**kw):
+        resp = await original(**kw)
+        resp.choices[0].finish_reason = next(reasons)
+        return resp
+
+    fake.create = create
+    oc = SimpleNamespace(chat=SimpleNamespace(completions=fake))
+    mc = ModelClient(ModelProfile(name="t", base_url="http://x", model="m"), client=oc)
+    assert (await mc.typed_call("x", "s", "u", Profile)).campus == "HKUST"
+    second = fake.requests[1]
+    assert second["max_tokens"] == 1024
+    assert all(m["role"] != "assistant" for m in second["messages"])
+
+
+def test_schema_caps_lists_and_can_require_every_key():
+    from flatjai.agent.answer import Shortlist
+    from flatjai.model_client import schema_for
+
+    assert schema_for(Profile)["properties"]["soft_preferences"]["maxItems"] == 6
+    assert "required" not in schema_for(Profile)
+    s = schema_for(Profile, require_all_keys=True)
+    assert set(s["required"]) == set(s["properties"]) and s["additionalProperties"] is False
+    assert s["properties"]["soft_preferences"]["maxItems"] == 6
+    nested = schema_for(Shortlist, require_all_keys=True)["$defs"]["Pick"]
+    assert nested["required"] == ["id", "reasons"]

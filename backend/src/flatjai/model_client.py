@@ -40,7 +40,7 @@ class ModelClient:
     client: AsyncOpenAI | None = None
     calls: list[CallStats] = field(default_factory=list)
     semaphore: asyncio.Semaphore | None = None  # shared by every run: the server's concurrency limit
-    call_limit: int | None = None  # per-run budget (40 model calls)
+    call_limit: int | None = None  # per-run budget (40 model calls by default)
 
     def __post_init__(self) -> None:
         if self.client is None:

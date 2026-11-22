@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     # Frozen snapshot: pages and searches only from the cache, never the network (evaluation, demo)
     fj_offline: bool = False
 
-    # Agent budgets (90 s per brief; a laptop model may need more, set RUN_MAX_SECONDS)
+    # Agent budgets (target 90 s per brief; a laptop model may need more, set RUN_MAX_SECONDS)
     run_max_seconds: float = 90.0
 
     # Experiment E2: switch off agent parts (agent/ablations.py), comma-separated; evaluation only

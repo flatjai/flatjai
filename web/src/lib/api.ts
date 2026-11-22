@@ -212,7 +212,6 @@ async function getJson<T>(path: string): Promise<T> {
   return res.json();
 }
 
-export const listRuns = () => getJson<RunInfo[]>("/runs");
 
 export type Turn = {
   id: string;

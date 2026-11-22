@@ -13,7 +13,7 @@ Stage = Literal["understand", "plan", "search", "read", "match", "reflect", "ans
 
 @dataclass(frozen=True)
 class Budget:
-    """Per-run limits (40 model calls, 60 fetches, 90 s). When one runs out, the agent
+    """Per-run limits (40 model calls, 60 fetches, 90 s by default). When one runs out, the agent
     answers with what it has and says so."""
 
     max_seconds: float = 90.0

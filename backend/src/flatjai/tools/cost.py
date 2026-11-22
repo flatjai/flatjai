@@ -6,6 +6,7 @@ Hong Kong customs (stated as assumptions in the answer):
 - agent commission: half a month's rent from the tenant, unless the listing says otherwise
 - management fee: usually included in rent for residential leases; added when the listing says not
 """
+
 from pydantic import BaseModel
 
 from ..schemas import Listing
