@@ -18,3 +18,7 @@ deploy/otp/data/*
 
 # evaluation run logs
 eval/results/*.log
+deploy/tacc/job/flatjai.tar.gz
+deploy/tacc/job/server-url.txt
+# raw TACC job output (trace databases); the .jsonl copies sit in eval/results/
+eval/results/tacc-*/

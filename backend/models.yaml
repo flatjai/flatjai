@@ -11,7 +11,7 @@ models:
     extra_body: {reasoning_effort: none}
   tacc:
     base_url_file: ../deploy/tacc/server-url.txt   # SERVICE_BASE_URL from qwen-public-serve
-    model: Qwen3.8-27B
+    model: qwen3.8-27b   # vLLM matches the served name exactly (course kit: qwen_client.py)
     context: 32768
     max_concurrency: 4
     json_schema: true
