@@ -6,8 +6,9 @@ So FlatJai runs its evaluation inside TACC too, as a CPU job built from the cour
 `qwen-public-client` (same environment checks, `qwen-python`, proxy bypass for the internal URL).
 
 ```
-scripts/run-e3.sh                                   # service + FlatJai, B1, B0 -> eval/results/*-tacc.jsonl
-SYSTEMS="flatjai-model_facts" scripts/run-e3.sh     # an ablation on 27B
+./run.sh tacc                                       # FlatJai, B1, B0 on 27B, scored, on the dashboard
+SYSTEMS="flatjai-model_facts" ./run.sh tacc         # an ablation on 27B
+scripts/run-e3.sh                                   # the job round trip alone (no scoring)
 ```
 
 ## How the job works

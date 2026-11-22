@@ -9,18 +9,21 @@ from a page FlatJai fetched or from a tool's computation, and code checks it bef
 ## The system
 
 ```mermaid
-flowchart LR
+flowchart TB
     student([Student]) -->|brief| web[Web UI<br/>Next.js, :3000]
     web -->|POST /runs| api[API<br/>FastAPI, :8000]
     api -.->|SSE: state, progress, card, done| web
     api --> agent[Agent loop<br/>7 stages]
     agent -->|typed calls| model[(Model<br/>Qwen 8B on Ollama<br/>or Qwen 27B on vLLM)]
-    agent --> tools[Tools]
-    tools --> searxng[SearXNG<br/>web search]
-    tools --> portals[Listing sites<br/>robots.txt, 1 req / 2 s]
-    tools --> als[HK Address Lookup<br/>geocoding]
-    tools --> otp[OpenTripPlanner<br/>bus, minibus, MTR]
+    agent --> tools
     agent --> pg[(Postgres<br/>runs, events, spans,<br/>pages, listings, cache)]
+    subgraph tools [Tools]
+        direction LR
+        searxng[SearXNG<br/>web search]
+        portals[Listing sites<br/>robots.txt, 1 req / 2 s]
+        als[HK Address Lookup<br/>geocoding]
+        otp[OpenTripPlanner<br/>bus, minibus, MTR]
+    end
     grafana[Grafana, :3001] -->|read-only views| pg
 ```
 
@@ -62,7 +65,6 @@ still executing.
 
 ```mermaid
 stateDiagram-v2
-    direction LR
     [*] --> Understand
     Understand --> Plan
     Understand --> [*]: budget or campus missing, ask once

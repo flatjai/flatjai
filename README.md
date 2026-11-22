@@ -48,19 +48,22 @@ every move-in cost (by a median HK$18,900 on 8B). Details: [docs/evaluation.md](
 ## How it works
 
 ```mermaid
-flowchart LR
+flowchart TB
     student([Student]) -->|brief| web[Web UI<br/>Next.js]
     web -->|POST /runs| api[API<br/>FastAPI]
     api -.->|live events, SSE| web
-    api --> agent[Agent loop]
-    agent -->|typed JSON calls| model[(Qwen 8B, Ollama<br/>or Qwen 27B, vLLM)]
-    agent --> tools[Tools]
-    tools --> searxng[SearXNG search]
-    tools --> sites[Listing sites<br/>robots.txt respected]
-    tools --> geo[HK address lookup]
-    tools --> otp[OpenTripPlanner<br/>bus, minibus, MTR]
+    api --> agent[Agent loop<br/>7 stages]
+    agent -->|typed JSON calls| model[(Qwen 8B on Ollama<br/>or Qwen 27B on vLLM)]
+    agent --> tools
     agent --> pg[(Postgres<br/>runs, traces, cache)]
-    grafana[Grafana] --> pg
+    subgraph tools [Tools]
+        direction LR
+        searxng[SearXNG<br/>search]
+        sites[Listing sites<br/>robots.txt respected]
+        geo[HK address<br/>lookup]
+        otp[OpenTripPlanner<br/>bus, minibus, MTR]
+    end
+    grafana[Grafana<br/>metrics] --> pg
 ```
 
 Each brief runs through seven stages. The run is saved after every stage, so it can resume after
@@ -68,7 +71,6 @@ a crash, and the browser can reconnect without losing anything.
 
 ```mermaid
 stateDiagram-v2
-    direction LR
     [*] --> Understand
     Understand --> Plan
     Understand --> [*]: budget or campus missing, ask once
@@ -169,12 +171,15 @@ It is safe to run again, and it never overwrites your database.
 
 ### 3. Start it
 
-In two terminals:
-
 ```bash
-make dev        # API on http://localhost:8000 (docs at /docs)
-make web        # app on http://localhost:3000
+./run.sh local              # the app on this machine (Ctrl-C stops it)
+./run.sh local --offline    # the same, answering from the frozen snapshot only
+./run.sh tacc               # the evaluation suite on Qwen 27B inside TACC
 ```
+
+`./run.sh local` starts the Docker services, the API and the web app in one terminal (`make local`
+does the same). To run the API and the web app in separate terminals instead, use `make dev` and
+`make web`.
 
 | Open | What |
 |---|---|
@@ -182,8 +187,15 @@ make web        # app on http://localhost:3000
 | http://localhost:3001 | Metrics dashboard (Grafana, no login) |
 | http://localhost:8000/docs | API reference |
 
-`FJ_OFFLINE=1 make dev` uses only the frozen snapshot: no listing site is contacted, and results
-are repeatable. Stop the services with `make down`; your data stays in the Docker volume.
+Offline mode (`--offline`, or `FJ_OFFLINE=1 make dev`) uses only the frozen snapshot: no listing
+site is contacted, and results are repeatable. Stop the Docker services with `make down`; your data
+stays in the Docker volume.
+
+**Local or TACC?** The app runs with a model on your machine. Qwen 27B on TACC is reachable only
+from inside the cluster, so `./run.sh tacc` sends FlatJai there as a batch job instead. The job
+starts the course's vLLM service, runs the suite against it, downloads the results, scores them
+into `eval/results/report-tacc.md` and loads them into the dashboard. It needs TACC access and
+the one-time setup in [docs/tacc.md](docs/tacc.md).
 
 ### Models
 
@@ -217,7 +229,7 @@ runs.
 make snapshot-import          # load the frozen market into Postgres (setup.sh does this once)
 make eval                     # B0, B1 and FlatJai over the suite -> eval/results/report.md
 make ablate                   # FlatJai with one part switched off at a time (E2)
-scripts/run-e3.sh             # the same suite on Qwen 27B inside TACC (E3)
+./run.sh tacc                 # the same suite on Qwen 27B inside TACC (E3), scored
 ```
 
 ![Within limits, invented facts and outcome for every system and ablation, on 8B and 27B](docs/images/quality.png)
@@ -233,6 +245,8 @@ Failures found on the way and how they were fixed: [docs/failure-analysis.md](do
 | Command | What it does |
 |---|---|
 | `./setup.sh` | Everything from a fresh clone (safe to rerun) |
+| `./run.sh local` / `make local` | The app here: services, API and web in one terminal (`--offline` / `OFFLINE=1`: snapshot only) |
+| `./run.sh tacc` / `make tacc` | The suite on Qwen 27B inside TACC, scored and loaded into the dashboard |
 | `make up` / `make down` | Start or stop Postgres, SearXNG, Grafana (and OpenTripPlanner once built) |
 | `make dev` / `make web` | API on :8000 with reload / app on :3000 |
 | `make test` | 194 tests: no model, network or database needed |

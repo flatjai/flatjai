@@ -1,5 +1,11 @@
 .PHONY: up down otp-data otp-graph model migrate dev web test lint check-model eval-understand ablate \
-	snapshot snapshot-import eval eval-score obs
+	snapshot snapshot-import eval eval-score obs local tacc
+
+local:         ## run the app here: services, API and web in one terminal (OFFLINE=1: snapshot only)
+	./run.sh local $(if $(filter 1,$(OFFLINE)),--offline)
+
+tacc:          ## the evaluation suite on Qwen 27B inside TACC, scored and loaded into the dashboard
+	./run.sh tacc
 
 up:            ## start Postgres, SearXNG and Grafana (and OpenTripPlanner once its graph is built)
 	docker compose $(if $(wildcard infra/otp/data/graph.obj),--profile otp) up -d --wait

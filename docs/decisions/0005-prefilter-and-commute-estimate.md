@@ -37,7 +37,7 @@ ALS for MTR stations (matched Diamond Hill, Hang Hau and HKU to Hung Hom), the O
 mirrors at capacity), Nominatim (empty results), the Wikidata query service (errors).
 
 ## Consequences and next steps
-- Campus last-mile minutes are estimates; the evaluation's commute-error metric
+- Campus last-mile minutes are estimates; the evaluation's commute-error metric (design section 12)
   must check the model against real journeys and recalibrate the constants.
 - Homes in areas without MTR (Sai Kung, Clear Water Bay) rely on the feeder-bus or direct-bus
   estimate, the weakest part of the model; OpenTripPlanner with GTFS would fix it.
