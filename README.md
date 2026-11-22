@@ -19,7 +19,11 @@ is touched), against two baselines on the same model: B0 (the model alone) and B
 top pages, one answer). A scorer checks every shown home in its own code. Results in
 `eval/results/report.md`, failures and their fixes in `docs/failure-analysis.md` (decision 0009).
 CI runs the tests and lint on every push.
-Not yet: Qwen 27B on TACC (M5), precision@5 against hand labels.
+E2: ablations (`make ablate`) show what each part earns: without the cost tool and router the model
+understates every cost and 24% of shown homes break a limit; without re-planning fewer briefs end well.
+E3: the same suite on Qwen3.8-27B on TACC (`scripts/run-e3.sh`, `deploy/tacc/README.md`): 100% of
+shown homes within limits, 0% invented facts, 19 s per brief.
+Not yet: precision@5 against hand labels; briefs 21 to 50 are drafts.
 
 ## Run it
 One command from a fresh clone (macOS or Linux; on Windows use WSL2):
@@ -43,7 +47,7 @@ make web                # UI on http://localhost:3000
 Other commands:
 
 ```bash
-make test               # 181 tests, no model, network or Postgres needed
+make test               # 194 tests, no model, network or Postgres needed
 make check-model        # the model returns a valid Profile
 make eval               # the query suite on the snapshot -> eval/results/report.md
 make down               # stop the services (data stays in the Docker volume)
@@ -61,7 +65,7 @@ make eval               # B0, B1 and FlatJai over the suite, then eval/results/r
 make eval SYSTEMS=flatjai REPEAT=3
 ```
 
-Switch to TACC: write `SERVICE_BASE_URL` into `deploy/tacc/server-url.txt`, set `FJ_MODEL=tacc`.
+Qwen 27B on TACC: `scripts/run-e3.sh` runs the suite inside TACC (the service URL is cluster-internal); see `deploy/tacc/README.md`.
 
 ## Layout
 | Path | What |

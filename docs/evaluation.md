@@ -50,6 +50,24 @@ and put 24% of shown homes over a limit the router would have caught. Without re
 briefs end with fewer or no homes. Duplicates matter less on this snapshot than expected. Full table
 with intervals: `results/report.md`.
 
+## E3: Qwen3.8-27B on TACC (2026-11-22, 20 briefs x 1, snapshot)
+
+Run inside TACC with `scripts/run-e3.sh` (see `deploy/tacc/README.md`); report: `results/report-tacc.md`.
+
+| Metric | B0 | B1 | FlatJai | FlatJai, model_facts |
+|---|---|---|---|---|
+| Constraint satisfaction | – | 100% | 100% | 81% |
+| All limits confirmed | – | 25% | 62% (8B: 52%) | 40% |
+| Invented facts | – | 52% | 0% | 0% |
+| Outcome ok | 0% | 10% | 100% | 100% |
+| Cost figures off the cost tool | – | – | 0% | 100% (move-in median HK$3,000 low) |
+| Commute error vs router (median / max) | – | – | 0 | 13 / 39 min |
+| Seconds per brief (median) | 0.4 | 5.2 | 19.1 (8B: 26.3) | 22.4 |
+
+The larger model confirms more limits and runs faster on the GPUs, but the baselines stay poor and
+the model's own cost and commute figures stay wrong: the design (tools for facts, checks in code)
+carries the honesty on both models.
+
 ## Draft cases
 
 Cases 21 to 50 in `suite.yaml` carry `status: draft`: written, not yet reviewed, and not yet in the
