@@ -1,5 +1,5 @@
 # FlatJai's Postgres, read through the read-only login `grafana`, which sees only schema obs
-# (created by scripts/load_obs.py, `make obs`).
+# (created by infra/grafana/load.py, `make obs`).
 apiVersion: 1
 datasources:
   - name: FlatJai Postgres

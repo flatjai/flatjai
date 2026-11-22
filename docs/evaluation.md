@@ -1,13 +1,13 @@
-# eval
+# Evaluation
 
-The query suite, the baselines and the scorer.
+The query suite, the baselines, the scorer and the results of experiments E1 (systems), E2 (ablations) and E3 (Qwen 27B on TACC). The code lives in `eval/`.
 
 | File | What it is |
 |---|---|
-| `suite.yaml` | 20 student briefs in 7 categories, each with the student's hard limits as we read them (`truth`) and what a good answer does (`expect`) |
-| `run_suite.py` | Runs one system over the suite and writes one JSON line per case to `results/` |
-| `score.py` | Scores result files with its own code and writes `results/report.md` |
-| `understand_check.py` | The Understand stage alone: briefs to expected profile fields (`make eval-understand`) |
+| `eval/suite.yaml` | 20 student briefs in 7 categories, each with the student's hard limits as we read them (`truth`) and what a good answer does (`expect`) |
+| `eval/run_suite.py` | Runs one system over the suite and writes one JSON line per case to `eval/results/` |
+| `eval/score.py` | Scores result files with its own code and writes `eval/results/report.md` |
+| `eval/understand_check.py` | The Understand stage alone: briefs to expected profile fields (`make eval-understand`) |
 
 ## Systems
 
@@ -48,11 +48,11 @@ make ablate ABLATIONS=no_dedup REPEAT=3
 Without the tools the model understated every cost (monthly by a median HK$600, move-in by HK$18,900)
 and put 24% of shown homes over a limit the router would have caught. Without re-planning, harder
 briefs end with fewer or no homes. Duplicates matter less on this snapshot than expected. Full table
-with intervals: `results/report.md`.
+with intervals: `eval/results/report.md`.
 
 ## E3: Qwen3.8-27B on TACC (2026-11-22, 20 briefs x 1, snapshot)
 
-Run inside TACC with `scripts/run-e3.sh` (see `deploy/tacc/README.md`); report: `results/report-tacc.md`.
+Run inside TACC with `scripts/run-e3.sh` (see `docs/tacc.md`); report: `eval/results/report-tacc.md`.
 
 | Metric | B0 | B1 | FlatJai | FlatJai, model_facts |
 |---|---|---|---|---|
@@ -109,7 +109,7 @@ rules are pinned by `backend/tests/test_eval_score.py`.
 
 ## Results (2026-11-20, Qwen3 8B local, frozen snapshot, 20 briefs x 3 repeats)
 
-Full tables: `results/report.md`. Failures found on the way and their fixes: `docs/failure-analysis.md`.
+Full tables: `eval/results/report.md`. Failures found on the way and their fixes: `docs/failure-analysis.md`.
 
 | | B0 model only | B1 search + answer | FlatJai |
 |---|---|---|---|
@@ -137,7 +137,7 @@ Times are on the snapshot with cached extractions; a live run on the laptop take
 
 - Commute is checked against the commute FlatJai shows (OpenTripPlanner on open data), not against
   journeys timed by hand. The OTP feed's MTR running times are fitted to timetable times
-  (`backend/scripts/build_mtr_gtfs.py`).
+  (`scripts/build_mtr_gtfs.py`).
 - B0 and B1 commutes are the model's own claims; they are scored as claimed.
 - 20 cases, so intervals are wide. Precision@5 against hand labels and the LLM-judged explanation
   quality from the design are not built yet.

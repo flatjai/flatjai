@@ -1,4 +1,4 @@
-"""Prepare the observability dashboard's data (Grafana, deploy/grafana): `make obs`.
+"""Prepare the observability dashboard's data (Grafana, infra/grafana): `make obs`.
 
 Grafana reads Postgres directly, through the views in schema `obs`:
   obs.runs, obs.spans  every run and span on this laptop (public.runs/spans, live) plus the runs
@@ -17,7 +17,7 @@ from pathlib import Path
 
 import psycopg
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 RESULTS = ROOT / "eval" / "results"
 REPORTS = {"report.jsonl": "Qwen 8B (laptop)", "report-tacc.jsonl": "Qwen 27B (TACC)"}
 EVAL_COLS = [

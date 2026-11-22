@@ -2,13 +2,13 @@
 	snapshot snapshot-import eval eval-score obs
 
 up:            ## start Postgres, SearXNG and Grafana (and OpenTripPlanner once its graph is built)
-	docker compose $(if $(wildcard deploy/otp/data/graph.obj),--profile otp) up -d --wait
+	docker compose $(if $(wildcard infra/otp/data/graph.obj),--profile otp) up -d --wait
 
-OTP_DATA = deploy/otp/data
+OTP_DATA = infra/otp/data
 otp-data:      ## download the HK bus/minibus GTFS and the OSM extract, and write the MTR GTFS
 	curl -sfL -o $(OTP_DATA)/gtfs.zip https://static.data.gov.hk/td/pt-headway-en/gtfs.zip
 	curl -sfL -o $(OTP_DATA)/hong-kong.osm.pbf https://download.geofabrik.de/asia/china/hong-kong/hong-kong-latest.osm.pbf
-	cd backend && uv run python scripts/build_mtr_gtfs.py
+	cd backend && uv run python ../scripts/build_mtr_gtfs.py
 
 otp-graph: otp-data  ## build the OpenTripPlanner graph (~2 min, needs ~3.5 GB for Docker)
 	docker run --rm -v "$(CURDIR)/$(OTP_DATA):/var/opentripplanner" -e JAVA_TOOL_OPTIONS=-Xmx3500m \
@@ -18,7 +18,7 @@ down:
 	docker compose --profile otp down
 
 model:         ## build the local model (qwen3:8b with a 16K context window)
-	ollama create flatjai-qwen3-8b -f deploy/ollama/Modelfile
+	ollama create flatjai-qwen3-8b -f infra/ollama/Modelfile
 
 migrate:       ## apply database migrations (Alembic)
 	cd backend && uv run alembic upgrade head
@@ -68,4 +68,4 @@ eval-score:    ## score the latest offline result of each system -> eval/results
 	cd backend && uv run python ../eval/score.py $$(for s in $(SYSTEMS); do ls -t ../eval/results/*-$$s-offline.jsonl | head -1; done)
 
 obs:           ## load TACC runs and eval scores for the Grafana dashboard -> http://localhost:3001
-	cd backend && uv run python ../scripts/load_obs.py
+	cd backend && uv run python ../infra/grafana/load.py

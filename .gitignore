@@ -1,24 +1,34 @@
+# Python
 .venv/
 __pycache__/
 *.pyc
 .pytest_cache/
 .ruff_cache/
-.env
-.DS_Store
+
+# Node
 node_modules/
 .next/
+
+# local settings and notes for AI assistants (kept on disk, not shared)
+.env
+CLAUDE.md
+web/AGENTS.md
+.DS_Store
+
+# fetched pages and their blobs (the shared copy is data/snapshot-*.tar.zst)
 data/raw/
 data/blobs/
-deploy/tacc/server-url.txt
 
-# OpenTripPlanner: downloaded and built data (see deploy/otp/README.md); only configs are kept
-deploy/otp/data/*
-!deploy/otp/data/build-config.json
-!deploy/otp/data/router-config.json
+# OpenTripPlanner: downloaded and built data (make otp-graph); only the configs are kept
+infra/otp/data/*
+!infra/otp/data/build-config.json
+!infra/otp/data/router-config.json
+
+# TACC: the bundle, this run's service URL, and the raw job output (.jsonl copies sit in eval/results/)
+infra/tacc/server-url.txt
+infra/tacc/job/flatjai.tar.gz
+infra/tacc/job/server-url.txt
+eval/results/tacc-*/
 
 # evaluation run logs
 eval/results/*.log
-deploy/tacc/job/flatjai.tar.gz
-deploy/tacc/job/server-url.txt
-# raw TACC job output (trace databases); the .jsonl copies sit in eval/results/
-eval/results/tacc-*/

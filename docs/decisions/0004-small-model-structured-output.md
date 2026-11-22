@@ -15,7 +15,7 @@ Date: 2026-11-16 · Status: accepted
   an output cut off by the limit is retried once without feeding the garbage back.
 - List fields carry `maxItems` (Pydantic `max_length`), enforced by guided decoding: no list loops.
 - Required-every-key is available (`require_all_keys=True`) but off by default.
-- `deploy/ollama/Modelfile` builds `flatjai-qwen3-8b` with `num_ctx 16384` (`make model`).
+- `infra/ollama/Modelfile` builds `flatjai-qwen3-8b` with `num_ctx 16384` (`make model`).
 - The Understand stage grounds the profile in code (`ground_profile`): a budget must be a number the
   student wrote ("9k", "1.5萬", "八千"), else it is cleared; a stated budget or commute the model
   dropped is filled from the text. `0`/`""` placeholders mean unknown.

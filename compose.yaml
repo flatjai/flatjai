@@ -15,7 +15,7 @@ services:
   searxng:   # free meta search, no API key; JSON at http://localhost:8888/search?q=...&format=json
     image: searxng/searxng:2026.11.15-2d500cb6b
     ports: ["8888:8080"]
-    volumes: ["./deploy/searxng/settings.yml:/etc/searxng/settings.yml:ro"]
+    volumes: ["./infra/searxng/settings.yml:/etc/searxng/settings.yml:ro"]
     environment:
       SEARXNG_BASE_URL: http://localhost:8888/
     healthcheck:
@@ -28,7 +28,7 @@ services:
     profiles: [otp]
     command: ["--load", "--serve"]
     ports: ["8080:8080"]
-    volumes: ["./deploy/otp/data:/var/opentripplanner"]
+    volumes: ["./infra/otp/data:/var/opentripplanner"]
     environment:
       JAVA_TOOL_OPTIONS: "-Xmx3g"
     healthcheck:
@@ -41,8 +41,9 @@ services:
     ports: ["3001:3000"]
     depends_on: [postgres]
     volumes:
-      - "./deploy/grafana/provisioning:/etc/grafana/provisioning:ro"
-      - "./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro"
+      - "./infra/grafana/datasource.yaml:/etc/grafana/provisioning/datasources/flatjai.yaml:ro"
+      - "./infra/grafana/dashboards.yaml:/etc/grafana/provisioning/dashboards/flatjai.yaml:ro"
+      - "./infra/grafana/flatjai.json:/var/lib/grafana/dashboards/flatjai.json:ro"
     environment:
       GF_AUTH_ANONYMOUS_ENABLED: "true"       # local only: open without a login, as a viewer
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer

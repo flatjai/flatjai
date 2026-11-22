@@ -1,6 +1,6 @@
-"""Writes dashboards/flatjai.json, the FlatJai observability dashboard (python3 build_dashboard.py).
+"""Writes flatjai.json, the FlatJai observability dashboard (python3 build_dashboard.py).
 
-Every panel is a SQL query on the views in schema obs (scripts/load_obs.py): runs and spans from this
+Every panel is a SQL query on the views in schema obs (infra/grafana/load.py): runs and spans from this
 laptop and from TACC, and the scored suite. Edit here, not in the JSON, then rebuild; Grafana picks up
 the file within 30 s.
 """
@@ -510,7 +510,6 @@ dashboard = {
     "panels": panels,
 }
 
-out = Path(__file__).parent / "dashboards" / "flatjai.json"
-out.parent.mkdir(exist_ok=True)
+out = Path(__file__).parent / "flatjai.json"
 out.write_text(json.dumps(dashboard, indent=2, ensure_ascii=False) + "\n")
 print(f"wrote {out} ({len(panels)} panels)")

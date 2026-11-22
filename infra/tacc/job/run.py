@@ -55,8 +55,8 @@ def main() -> int:
     with tarfile.open(WORKDIR / "flatjai.tar.gz") as tar:
         tar.extractall(LOCAL, filter="data")
     root = LOCAL / "flatjai"
-    (root / "deploy" / "tacc").mkdir(parents=True, exist_ok=True)
-    (root / "deploy" / "tacc" / "server-url.txt").write_text(base + "\n")
+    (root / "infra" / "tacc").mkdir(parents=True, exist_ok=True)
+    (root / "infra" / "tacc" / "server-url.txt").write_text(base + "\n")
     (root / ".env").write_text(
         "FJ_MODEL=tacc\nFJ_OFFLINE=1\nRUN_MAX_SECONDS=240\n"
         f"DATABASE_URL=sqlite+aiosqlite:///{root / 'data' / 'flatjai.db'}\n"

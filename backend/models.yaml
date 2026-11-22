@@ -4,13 +4,13 @@
 models:
   local:
     base_url: http://localhost:11434/v1   # Ollama; LM Studio is http://localhost:1234/v1
-    model: flatjai-qwen3-8b   # qwen3:8b with num_ctx 16384: deploy/ollama/Modelfile
+    model: flatjai-qwen3-8b   # qwen3:8b with num_ctx 16384: infra/ollama/Modelfile
     context: 16384
     max_concurrency: 1   # Ollama serves one request at a time by default (n_seq_max = 1)
     json_schema: true
     extra_body: {reasoning_effort: none}
   tacc:
-    base_url_file: ../deploy/tacc/server-url.txt   # SERVICE_BASE_URL from qwen-public-serve
+    base_url_file: ../infra/tacc/server-url.txt   # SERVICE_BASE_URL from qwen-public-serve
     model: qwen3.8-27b   # vLLM matches the served name exactly (course kit: qwen_client.py)
     context: 32768
     max_concurrency: 4

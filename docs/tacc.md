@@ -11,10 +11,10 @@ SYSTEMS="flatjai-model_facts" scripts/run-e3.sh     # an ablation on 27B
 ```
 
 ## How the job works
-- `bundle.py` (laptop) packs the code, the frozen market as one SQLite file (pages, extractions, tool
+- `infra/tacc/bundle.py` (laptop) packs the code, the frozen market as one SQLite file (pages, extractions, tool
   answers, and the page blobs they point to) and the libraries the course runtime lacks
   (sqlalchemy, aiosqlite, selectolax; openai and pydantic pinned to our lock) as Linux wheels.
-- `job/run.py` (TACC) unpacks it on the node's local disk (the shared `/mnt/home` is nearly full),
+- `infra/tacc/job/run.py` (TACC) unpacks it on the node's local disk (the shared `/mnt/home` is nearly full),
   checks the imports before waiting, waits for the service, runs each system offline
   (`FJ_OFFLINE=1`, no listing site touched) and copies results to `$TACC_USERDIR/flatjai-e3/<job>/`
   after each system, so a job that hits its limit keeps what it finished.

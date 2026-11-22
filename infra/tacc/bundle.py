@@ -5,8 +5,8 @@ The course runtime (Python 3.12, x86_64, glibc 2.35) has openai, httpx, pydantic
 pip, sqlalchemy, aiosqlite or selectolax, and the shared disk is nearly full, so the job ships one
 small archive and unpacks it on the node's local /tmp.
 
-Run from backend/:  uv run python ../deploy/tacc/bundle.py
-Writes deploy/tacc/job/flatjai.tar.gz (the job directory tcloud submit uploads).
+Run from backend/:  uv run python ../infra/tacc/bundle.py
+Writes infra/tacc/job/flatjai.tar.gz (the job directory tcloud submit uploads).
 """
 
 import shutil
@@ -23,7 +23,7 @@ from flatjai.config import settings
 from flatjai.storage import models as m
 
 ROOT = Path(__file__).resolve().parents[2]
-JOB = ROOT / "deploy" / "tacc" / "job"
+JOB = ROOT / "infra" / "tacc" / "job"
 TABLES = (m.Page, m.Listing, m.CacheEntry)  # the snapshot: pages, extractions, tool answers
 
 # Locked versions (backend/uv.lock); everything FlatJai imports, pinned, so the job does not depend on

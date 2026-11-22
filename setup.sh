@@ -118,13 +118,13 @@ elif [ -n "$snapshot" ]; then
 else
   warn "no data/snapshot-*.tar.zst found: FlatJai will start with an empty cache"
 fi
-(cd backend && uv run --frozen python ../scripts/load_obs.py >/dev/null 2>&1) \
+(cd backend && uv run --frozen python ../infra/grafana/load.py >/dev/null 2>&1) \
   && ok "dashboard data loaded (Grafana on http://localhost:3001)" || warn "dashboard data not loaded: run 'make obs' to see why"
 
 # --- 5. commute router ------------------------------------------------------------------------
 if [ "$WITH_OTP" = 1 ]; then
   step "OpenTripPlanner (real bus, minibus and MTR journeys)"
-  if [ -f deploy/otp/data/graph.obj ]; then
+  if [ -f infra/otp/data/graph.obj ]; then
     ok "graph already built"
   else
     echo "  downloading open data (~50 MB) and building the graph (~2 min)..."

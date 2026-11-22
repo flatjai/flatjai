@@ -5,7 +5,7 @@
 #   SYSTEMS="flatjai flatjai-model_facts" scripts/run-e3.sh
 #
 # Starts the course vLLM service (qwen-public-serve from the course kit), submits the FlatJai client
-# job (deploy/tacc/job) with the service's URL, follows it, downloads the results into eval/results/,
+# job (infra/tacc/job) with the service's URL, follows it, downloads the results into eval/results/,
 # and cancels the service. The client runs inside TACC because the service URL is cluster-internal.
 # Needs: tcloud configured (tcloud config -u USER -f KEY; tcloud init), the course kit unpacked
 # (TACC_KIT, default below) with setup-sdk-account.sh run once, and Postgres up for the bundle.
@@ -13,13 +13,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT=$PWD
 KIT=${TACC_KIT:-$HOME/Work/ust/coursework/Adv-AI-Computing-And-Systems-CSIT6000V/project/tacc-kit/qwen27b-student-release}
-JOB=deploy/tacc/job
+JOB=infra/tacc/job
 SYSTEMS=${SYSTEMS:-flatjai b1 b0}
-command -v tcloud >/dev/null || { echo "tcloud not on PATH (see deploy/tacc/README.md)"; exit 1; }
+command -v tcloud >/dev/null || { echo "tcloud not on PATH (see docs/tacc.md)"; exit 1; }
 [ -d "$KIT/qwen-public-serve" ] || { echo "course kit not found at $KIT (set TACC_KIT)"; exit 1; }
 
 echo "Bundling FlatJai and the frozen market..."
-(cd backend && uv run python ../deploy/tacc/bundle.py | tail -1)
+(cd backend && uv run python ../infra/tacc/bundle.py | tail -1)
 echo "$SYSTEMS" > "$JOB/systems.txt"
 
 job_id() { sed -n 's/^Submitted batch job \([0-9]*\).*/\1/p'; }
