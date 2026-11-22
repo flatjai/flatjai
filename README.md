@@ -29,24 +29,10 @@ Built for CSIT6000V (Advanced AI Computing and Systems, HKUST, Fall 2026). FlatJ
 SSH tunnel, and the evaluation runs as a TACC job next to it. Without TACC access, Qwen3 8B on your
 own machine can stand in.
 
-**Want to try it?** See [Quick start](#quick-start) and [Using FlatJai](#using-flatjai).
+**Want to try it?** [Using FlatJai](#using-flatjai): clone, `./setup.sh`, `./run.sh app`.
 **Reviewing the evaluation?** [Getting Started Instructions](#getting-started-instructions) sets it
 up and checks one brief end to end in about 30 minutes; [Detailed Instructions](#detailed-instructions)
 reruns the experiments and compares them with the reported results.
-
-## Quick start
-
-```bash
-git clone https://github.com/BhanuRana/flatjai.git
-cd flatjai
-./setup.sh        # asks where the model runs: TACC (recommended) or this machine
-./run.sh app      # then open http://localhost:3000
-```
-
-You need Docker, uv, Node.js 20.9 or newer and zstd; `setup.sh` checks each one and tells you how to
-install anything missing. For Qwen 27B on TACC you also need a TACC account for the course, tcloud
-and the HKUST network or VPN ([docs/tacc.md](docs/tacc.md)). Install steps for macOS, Linux and
-Windows are under [Prerequisites](#prerequisites).
 
 ## Why you can trust its answers
 
@@ -133,11 +119,24 @@ The full design (data flow, storage, resume, tracing, code map) is in
 
 # Using FlatJai
 
-## Start it
+## Set up and run
 
 ```bash
-./run.sh app                  # the app, on the model chosen at setup (Ctrl-C stops it)
-./run.sh app --offline        # the same, answering from the frozen snapshot only
+git clone https://github.com/BhanuRana/flatjai.git
+cd flatjai
+./setup.sh        # once: asks where the model runs, TACC (recommended) or this machine
+./run.sh app      # then open http://localhost:3000
+```
+
+You need Docker, uv, Node.js 20.9 or newer and zstd; `setup.sh` checks each one and tells you how to
+install anything missing. For Qwen 27B on TACC you also need a TACC account for the course, tcloud
+and the HKUST network or VPN ([docs/tacc.md](docs/tacc.md)). Install steps for macOS, Linux and
+Windows are under [Prerequisites](#prerequisites).
+
+Other ways to run it:
+
+```bash
+./run.sh app --offline        # answer from the frozen snapshot only (no listing site contacted)
 ./run.sh app --model local    # this run on Qwen 8B here, whatever setup chose
 ./run.sh suite                # the evaluation suite on Qwen 27B inside TACC
 ```
