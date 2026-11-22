@@ -11,6 +11,20 @@ SYSTEMS="flatjai-model_facts" ./run.sh tacc         # an ablation on 27B
 scripts/run-e3.sh                                   # the job round trip alone (no scoring)
 ```
 
+## The app on 27B: `./run.sh local --tacc`
+
+To use the web app with Qwen 27B instead of the laptop model, `./run.sh local --tacc` runs
+`scripts/tacc-tunnel.sh`, which:
+
+1. submits the course's `qwen-public-serve` job (or reuses one given as `TACC_SERVICE_URL`) and reads its URL from the job log;
+2. opens an SSH tunnel through the TACC gateway, `localhost:8001` to the service, as the person running it
+   (user, gateway, port and key from `~/.tcloud/.userconfig`);
+3. waits until the model answers, then starts the app with the `tacc-tunnel` profile (`backend/models.yaml`).
+
+Ctrl-C closes the tunnel and cancels the service job. The machine must reach the gateway (HKUST
+network or VPN). The service ends after 1 hour; start again for a new one. To use another local port,
+set `TUNNEL_PORT` and change `base_url` of the `tacc-tunnel` profile to match.
+
 ## How the job works
 - `infra/tacc/bundle.py` (laptop) packs the code, the frozen market as one SQLite file (pages, extractions, tool
   answers, and the page blobs they point to) and the libraries the course runtime lacks

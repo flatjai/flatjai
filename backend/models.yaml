@@ -16,3 +16,10 @@ models:
     max_concurrency: 4
     json_schema: true
     extra_body: {chat_template_kwargs: {enable_thinking: false}}
+  tacc-tunnel:   # the same service, forwarded to this machine: ./run.sh local --tacc (scripts/tacc-tunnel.sh)
+    base_url: http://localhost:8001/v1
+    model: qwen3.8-27b
+    context: 32768
+    max_concurrency: 4
+    json_schema: true
+    extra_body: {chat_template_kwargs: {enable_thinking: false}}

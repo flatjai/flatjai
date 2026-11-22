@@ -384,6 +384,7 @@ All checks are code in `eval/score.py`, independent of the agent's own checks, a
 ```bash
 ./run.sh local              # the app on this machine (Ctrl-C stops it)
 ./run.sh local --offline    # the same, answering from the frozen snapshot only
+./run.sh local --tacc      # the app here, with Qwen 27B on TACC through an SSH tunnel
 ./run.sh tacc               # the evaluation suite on Qwen 27B inside TACC
 ```
 
@@ -434,6 +435,7 @@ Figure 1, the evaluation at a glance:
 |---|---|
 | `./setup.sh` | Everything from a fresh clone (safe to rerun) |
 | `./run.sh local` / `make local` | The app here: services, API and web in one terminal (`--offline` / `OFFLINE=1`: snapshot only) |
+| `./run.sh local --tacc` | The app here with Qwen 27B on TACC through an SSH tunnel ([docs/tacc.md](docs/tacc.md); VPN needed) |
 | `./run.sh tacc` / `make tacc` | The suite on Qwen 27B inside TACC, scored and loaded into the dashboard |
 | `make up` / `make down` | Start or stop Postgres, SearXNG, Grafana (and OpenTripPlanner once built) |
 | `make dev` / `make web` | API on :8000 with reload / app on :3000 |
