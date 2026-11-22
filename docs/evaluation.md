@@ -54,7 +54,10 @@ make eval-score          # rescore the latest result of each system
 
 The snapshot is recorded by one live pass: `FJ_OFFLINE=0 uv run python ../eval/run_suite.py --system flatjai --tag record`.
 
-## What the scorer checks (all in code, none from the agent's own checks)
+## How answers are scored (by code, not by people)
+
+The scorer is a program, `eval/score.py`: it re-checks every shown home and figure with its own code,
+none of it taken from the agent's own checks.
 
 | Metric | Definition |
 |---|---|

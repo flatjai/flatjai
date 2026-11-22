@@ -29,12 +29,26 @@ Built for CSIT6000V (Advanced AI Computing and Systems, HKUST, Fall 2026). FlatJ
 SSH tunnel, and the evaluation runs as a TACC job next to it. Without TACC access, Qwen3 8B on your
 own machine can stand in.
 
-This README has two parts, as the artifact guidelines ask:
-**[Getting Started Instructions](#getting-started-instructions)** (set up and check that the system
-works, about 30 minutes plus downloads) and **[Detailed Instructions](#detailed-instructions)**
-(rerun the evaluation and compare with the reported results).
+**Want to try it?** See [Quick start](#quick-start) and [Using FlatJai](#using-flatjai).
+**Reviewing the evaluation?** [Getting Started Instructions](#getting-started-instructions) sets it
+up and checks one brief end to end in about 30 minutes; [Detailed Instructions](#detailed-instructions)
+reruns the experiments and compares them with the reported results.
 
-## What the artifact claims
+## Quick start
+
+```bash
+git clone https://github.com/BhanuRana/flatjai.git
+cd flatjai
+./setup.sh        # asks where the model runs: TACC (recommended) or this machine
+./run.sh app      # then open http://localhost:3000
+```
+
+You need Docker, uv, Node.js 20.9 or newer and zstd; `setup.sh` checks each one and tells you how to
+install anything missing. For Qwen 27B on TACC you also need a TACC account for the course, tcloud
+and the HKUST network or VPN ([docs/tacc.md](docs/tacc.md)). Install steps for macOS, Linux and
+Windows are under [Prerequisites](#prerequisites).
+
+## Why you can trust its answers
 
 The model makes the decisions (what the student means, where to look, what to read next, how to
 explain the choice). **The facts come from tools, and code checks them:**
@@ -45,8 +59,9 @@ explain the choice). **The facts come from tools, and code checks them:**
 - "fits your budget" and "under 40 minutes" are decided by code, never by the model;
 - any sentence in the explanation whose number is not one of that home's facts is removed.
 
-On a frozen snapshot of the market (20 briefs in 7 categories, scored by independent code), the
-artifact supports these claims:
+We measured this on a frozen snapshot of the market: 20 student briefs in 7 categories, each answer
+checked by a separate program (`eval/score.py`, not the agent's own checks and not a person). The
+results support four claims:
 
 | | Claim | Evidence |
 |---|---|---|
@@ -113,6 +128,84 @@ stateDiagram-v2
 
 The full design (data flow, storage, resume, tracing, code map) is in
 [docs/architecture.md](docs/architecture.md).
+
+---
+
+# Using FlatJai
+
+## Start it
+
+```bash
+./run.sh app                  # the app, on the model chosen at setup (Ctrl-C stops it)
+./run.sh app --offline        # the same, answering from the frozen snapshot only
+./run.sh app --model local    # this run on Qwen 8B here, whatever setup chose
+./run.sh suite                # the evaluation suite on Qwen 27B inside TACC
+```
+
+`./run.sh app` starts the Docker services, the model's TACC job and its tunnel (about 5 minutes,
+or reuses an open tunnel), the API and the web app in one terminal (`make app` does the same).
+Ctrl-C stops all of it and cancels the TACC job. To run the API and the web app in separate
+terminals instead, open the tunnel with `scripts/tacc-tunnel.sh`, then use `make dev` and `make web`.
+
+| Open | What |
+|---|---|
+| http://localhost:3000 | FlatJai: write a brief, or tap one of the examples |
+| http://localhost:3001 | Metrics dashboard (Grafana, no login) |
+| http://localhost:8000/docs | API reference |
+
+Stop the Docker services with `make down`; your data stays in the Docker volume.
+
+## Models
+
+The model is chosen by `FJ_MODEL` in `.env` (`./setup.sh` sets it), from the profiles in
+`backend/models.yaml`:
+
+| Profile | Model | Where |
+|---|---|---|
+| `tacc-tunnel` (default) | Qwen3.8-27B, AWQ INT4, 32K context | vLLM on TACC GPUs, forwarded to `localhost:8001`: [docs/tacc.md](docs/tacc.md) |
+| `tacc` | the same | from inside a TACC job (`./run.sh suite`) |
+| `local` | Qwen3 8B, 16K context | Ollama on your machine (`make model` builds it); the fallback without TACC |
+
+Any OpenAI-compatible server works (LM Studio, vLLM, llama.cpp server): add a profile with its
+`base_url` and `model`, and set `FJ_MODEL` to its name. `make check-model` confirms the model returns
+valid structured output.
+
+## See what the agent did
+
+Every stage, model call and tool call is recorded. Open **Inspect** on any answer to see one run.
+This one is the brief above on Qwen 27B on TACC: 19 s, 5 model calls, with the pages already read
+once (its first run, which fetched and read every page, took 76 s with 19 model calls):
+
+![Run inspector for a run on qwen3.8-27b: 19 s, 5 model calls, 89 tool calls, each stage, model call and tool call on a timeline](docs/images/run-inspector.png)
+
+The **Metrics** dashboard (Grafana, http://localhost:3001) covers every run, with Qwen 8B and 27B
+side by side: outcomes, time per brief and per stage, model and tool latency, cache hits, and the
+scored evaluation.
+
+![Grafana dashboard: runs, outcomes, time per brief, model calls and cache hits for 8B and 27B](docs/images/grafana.png)
+
+Figure 1, the evaluation at a glance:
+
+![Within limits, invented facts and outcome for every system and ablation, on 8B and 27B](docs/images/quality.png)
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `./setup.sh` | Everything from a fresh clone (safe to rerun) |
+| `./run.sh app` / `make app` | The app: services, the model (TACC job and tunnel, or Ollama), API and web in one terminal (`--offline` / `OFFLINE=1`: snapshot only; `--model tacc\|local` / `MODEL=`) |
+| `./run.sh suite` / `make suite` | The suite on Qwen 27B inside TACC, scored and loaded into the dashboard |
+| `scripts/tacc-tunnel.sh` | Start the 27B service on TACC and keep it forwarded to `localhost:8001` until Ctrl-C |
+| `make up` / `make down` | Start or stop Postgres, SearXNG, Grafana (and OpenTripPlanner once built) |
+| `make dev` / `make web` | API on :8000 with reload / app on :3000 |
+| `make test` | 194 tests: no model, network or database needed |
+| `make lint` | Ruff, ESLint and TypeScript |
+| `make check-model` | The active model returns a valid typed reply |
+| `make eval` / `make ablate` | The suite on the snapshot; ablations |
+| `make eval-score` | Rescore the latest offline result of each system |
+| `make obs` | Load TACC runs and evaluation scores into the dashboard |
+| `make otp-graph` | Rebuild the transit graph (~2 min) |
+| `make snapshot` / `make snapshot-import` | Freeze the current cache / load a snapshot |
 
 ---
 
@@ -385,9 +478,10 @@ SYSTEMS="flatjai-model_facts" ./run.sh suite    # the key ablation on 27B inside
 **5. Look at the runs** (optional): `make obs` loads the TACC runs and the scored suite into
 Grafana at http://localhost:3001, next to your own runs.
 
-## What the scorer checks
+## How answers are scored (by code, not by people)
 
-All checks are code in `eval/score.py`, independent of the agent's own checks, and pinned by
+The scorer is a program, `eval/score.py`. It re-checks every answer against the snapshot with its
+own code, independent of the agent's own checks, and its rules are pinned by
 `backend/tests/test_eval_score.py`:
 
 | Metric | Definition |
@@ -425,86 +519,12 @@ All checks are code in `eval/score.py`, independent of the agent's own checks, a
 - Precision@5 against hand labels and an LLM-judged explanation score are not built.
 - A live run (not offline) reads today's listing sites, so its results differ from the snapshot.
   Live mode fetches at most one page every 2 s per site and respects robots.txt.
-- Nothing in the artifact is destructive: it writes only to its own Docker volume, `.env`,
+- Nothing FlatJai runs is destructive: it writes only to its own Docker volume, `.env`,
   `data/blobs` and `eval/results/`.
 
 ---
 
-# Using FlatJai
-
-## Start it
-
-```bash
-./run.sh app                  # the app, on the model chosen at setup (Ctrl-C stops it)
-./run.sh app --offline        # the same, answering from the frozen snapshot only
-./run.sh app --model local    # this run on Qwen 8B here, whatever setup chose
-./run.sh suite                # the evaluation suite on Qwen 27B inside TACC
-```
-
-`./run.sh app` starts the Docker services, the model's TACC job and its tunnel (about 5 minutes,
-or reuses an open tunnel), the API and the web app in one terminal (`make app` does the same).
-Ctrl-C stops all of it and cancels the TACC job. To run the API and the web app in separate
-terminals instead, open the tunnel with `scripts/tacc-tunnel.sh`, then use `make dev` and `make web`.
-
-| Open | What |
-|---|---|
-| http://localhost:3000 | FlatJai: write a brief, or tap one of the examples |
-| http://localhost:3001 | Metrics dashboard (Grafana, no login) |
-| http://localhost:8000/docs | API reference |
-
-Stop the Docker services with `make down`; your data stays in the Docker volume.
-
-## Models
-
-The model is chosen by `FJ_MODEL` in `.env` (`./setup.sh` sets it), from the profiles in
-`backend/models.yaml`:
-
-| Profile | Model | Where |
-|---|---|---|
-| `tacc-tunnel` (default) | Qwen3.8-27B, AWQ INT4, 32K context | vLLM on TACC GPUs, forwarded to `localhost:8001`: [docs/tacc.md](docs/tacc.md) |
-| `tacc` | the same | from inside a TACC job (`./run.sh suite`) |
-| `local` | Qwen3 8B, 16K context | Ollama on your machine (`make model` builds it); the fallback without TACC |
-
-Any OpenAI-compatible server works (LM Studio, vLLM, llama.cpp server): add a profile with its
-`base_url` and `model`, and set `FJ_MODEL` to its name. `make check-model` confirms the model returns
-valid structured output.
-
-## See what the agent did
-
-Every stage, model call and tool call is recorded. Open **Inspect** on any answer to see one run.
-This one is the brief above on Qwen 27B on TACC: 19 s, 5 model calls, with the pages already read
-once (its first run, which fetched and read every page, took 76 s with 19 model calls):
-
-![Run inspector for a run on qwen3.8-27b: 19 s, 5 model calls, 89 tool calls, each stage, model call and tool call on a timeline](docs/images/run-inspector.png)
-
-The **Metrics** dashboard (Grafana, http://localhost:3001) covers every run, with Qwen 8B and 27B
-side by side: outcomes, time per brief and per stage, model and tool latency, cache hits, and the
-scored evaluation.
-
-![Grafana dashboard: runs, outcomes, time per brief, model calls and cache hits for 8B and 27B](docs/images/grafana.png)
-
-Figure 1, the evaluation at a glance:
-
-![Within limits, invented facts and outcome for every system and ablation, on 8B and 27B](docs/images/quality.png)
-
-## Commands
-
-| Command | What it does |
-|---|---|
-| `./setup.sh` | Everything from a fresh clone (safe to rerun) |
-| `./run.sh app` / `make app` | The app: services, the model (TACC job and tunnel, or Ollama), API and web in one terminal (`--offline` / `OFFLINE=1`: snapshot only; `--model tacc\|local` / `MODEL=`) |
-| `./run.sh suite` / `make suite` | The suite on Qwen 27B inside TACC, scored and loaded into the dashboard |
-| `scripts/tacc-tunnel.sh` | Start the 27B service on TACC and keep it forwarded to `localhost:8001` until Ctrl-C |
-| `make up` / `make down` | Start or stop Postgres, SearXNG, Grafana (and OpenTripPlanner once built) |
-| `make dev` / `make web` | API on :8000 with reload / app on :3000 |
-| `make test` | 194 tests: no model, network or database needed |
-| `make lint` | Ruff, ESLint and TypeScript |
-| `make check-model` | The active model returns a valid typed reply |
-| `make eval` / `make ablate` | The suite on the snapshot; ablations |
-| `make eval-score` | Rescore the latest offline result of each system |
-| `make obs` | Load TACC runs and evaluation scores into the dashboard |
-| `make otp-graph` | Rebuild the transit graph (~2 min) |
-| `make snapshot` / `make snapshot-import` | Freeze the current cache / load a snapshot |
+# Reference
 
 ## Project layout
 
