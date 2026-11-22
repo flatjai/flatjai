@@ -1,106 +1,275 @@
 # FlatJai (揾樓仔)
 
-An agentic home-search assistant for students in Hong Kong. A student writes a plain-language brief
-("HK$9,000 a month, own room, under 40 minutes to HKUST, from January"). FlatJai returns a shortlist
-showing the real monthly and move-in cost, the commute to campus, the source of each home and why it fits.
+**An AI agent that finds a home in Hong Kong for a student, and never makes up a number.**
 
-Course project for CSIT6000V (HKUST, Fall 2026). Runs on a local model in development and on Qwen3.8-27B (vLLM) on TACC.
+A student writes what they need in plain words: *"Own room, max HK$9,000 a month, under 40 minutes
+to HKUST, from January."* FlatJai searches the listing sites, reads each listing, and returns a
+short list of real homes. Each one shows its true monthly and move-in cost, the commute to campus
+on an actual bus and MTR route, where the listing came from, and why it fits.
 
-## Status
-The full agent loop runs on live listings. Understand (asks one question if budget or campus is
-missing) -> Plan -> Search -> Read -> Match -> Reflect (re-plan or read more) -> Answer, streamed to
-the UI over server-sent events. Every figure is checked against its page and every hard limit in
-code; the answer's claims are checked against the facts. Runs, events and traces are stored in
-Postgres, interrupted runs resume, and every turn of a chat can be inspected from the chat.
-Commutes are real journeys from OpenTripPlanner (bus, minibus and MTR legs, drawn on each card's
-map; decision 0007), with an offline estimate when OTP is not running (decision 0005).
-M4: a 20-brief query suite in 7 categories runs on a frozen snapshot of the market (no listing site
-is touched), against two baselines on the same model: B0 (the model alone) and B1 (one search, the
-top pages, one answer). A scorer checks every shown home in its own code. Results in
-`eval/results/report.md`, failures and their fixes in `docs/failure-analysis.md` (decision 0009).
-CI runs the tests and lint on every push.
-E2: ablations (`make ablate`) show what each part earns: without the cost tool and router the model
-understates every cost and 24% of shown homes break a limit; without re-planning fewer briefs end well.
-E3: the same suite on Qwen3.8-27B on TACC (`scripts/run-e3.sh`, `docs/tacc.md`): 100% of
-shown homes within limits, 0% invented facts, 19 s per brief.
-Observability: a Grafana dashboard (`make obs`, http://localhost:3001) over the same traces: runs,
-time per stage, model and tool calls, cache hits and the scored suite, 8B and 27B side by side.
-Not yet: precision@5 against hand labels; briefs 21 to 50 are drafts.
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/live-progress.png" alt="FlatJai working through a brief: understood, planned, searched, read 22 listings, 4 homes fit"></td>
+    <td width="50%"><img src="docs/images/commute-map.png" alt="A shortlisted room: HK$5,100 a month, 38 minutes to HKUST, its route on a map, every limit checked"></td>
+  </tr>
+  <tr>
+    <td>Every step is streamed live while it reads the market.</td>
+    <td>A result: rent, real cost to move in, the route to campus, and which of your limits it meets.</td>
+  </tr>
+</table>
 
-## Run it
-One command from a fresh clone (macOS or Linux; on Windows use WSL2):
+Built for CSIT6000V (Advanced AI Computing and Systems, HKUST, Fall 2026). It runs on a laptop
+with Qwen3 8B, and on Qwen3.8-27B on TACC GPUs.
 
-```bash
-./setup.sh              # checks tools, installs, starts services, loads the snapshot, builds OTP, pulls the model
-./setup.sh --no-otp     # skip OpenTripPlanner (Docker needs ~4 GB more); commutes use the offline estimate
-./setup.sh --no-model   # skip the ~5 GB local model (use FJ_MODEL=tacc instead)
+## Why it can be trusted
+
+The model makes the decisions (what the student means, where to look, what to read next, how to
+explain the choice). **The facts come from tools, and code checks them:**
+
+- every rent, size and address must be quoted from the listing page it came from;
+- the monthly and move-in costs are computed by code (deposit, first month, agent fee);
+- commutes are real journeys from OpenTripPlanner over Hong Kong's bus, minibus and MTR data;
+- "fits your budget" and "under 40 minutes" are decided by code, never by the model;
+- any sentence in the explanation whose number is not one of that home's facts is removed.
+
+Measured on a frozen snapshot of the market (20 briefs in 7 categories, scored by independent code):
+
+| | Invented facts | Homes within the student's limits | Brief handled well |
+|---|---|---|---|
+| The model alone (B0) | 85% | 100% (of 35 homes, mostly invented) | 12% |
+| One search, then answer (B1) | 44% | 71% | 15% |
+| **FlatJai, Qwen 8B** | **0%** | **100%** | **100%** |
+| **FlatJai, Qwen 27B** | **0%** | **100%** | **100%** |
+
+Median time per brief: 26 s on a laptop (8B), 19 s on TACC (27B). Switching the tools off and
+letting the model state costs and commutes puts 24% of shown homes over a limit and understates
+every move-in cost (by a median HK$18,900 on 8B). Details: [docs/evaluation.md](docs/evaluation.md).
+
+## How it works
+
+```mermaid
+flowchart LR
+    student([Student]) -->|brief| web[Web UI<br/>Next.js]
+    web -->|POST /runs| api[API<br/>FastAPI]
+    api -.->|live events, SSE| web
+    api --> agent[Agent loop]
+    agent -->|typed JSON calls| model[(Qwen 8B, Ollama<br/>or Qwen 27B, vLLM)]
+    agent --> tools[Tools]
+    tools --> searxng[SearXNG search]
+    tools --> sites[Listing sites<br/>robots.txt respected]
+    tools --> geo[HK address lookup]
+    tools --> otp[OpenTripPlanner<br/>bus, minibus, MTR]
+    agent --> pg[(Postgres<br/>runs, traces, cache)]
+    grafana[Grafana] --> pg
 ```
 
-It needs [Docker Desktop](https://www.docker.com/products/docker-desktop/) running,
-[uv](https://docs.astral.sh/uv/), Node 20.9+ with pnpm, zstd and [Ollama](https://ollama.com); it
-says how to install anything missing, and is safe to run again (it never overwrites your database).
-Then, in two terminals:
+Each brief runs through seven stages. The run is saved after every stage, so it can resume after
+a crash, and the browser can reconnect without losing anything.
 
-```bash
-make dev                # API on http://localhost:8000/docs (FJ_OFFLINE=1 make dev: snapshot only)
-make web                # UI on http://localhost:3000
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> Understand
+    Understand --> Plan
+    Understand --> [*]: budget or campus missing, ask once
+    Plan --> Search
+    Search --> Read
+    Read --> Match
+    Match --> Reflect
+    Reflect --> Read: read more
+    Reflect --> Plan: search elsewhere
+    Reflect --> Answer: enough homes
+    Answer --> [*]
 ```
 
-Metrics: `make up` also starts Grafana on http://localhost:3001 (no login). `make obs` loads the
-TACC runs and the scored suite beside the live traces (`./setup.sh` runs it once).
-
-Other commands:
-
-```bash
-make test               # 194 tests, no model, network or Postgres needed
-make check-model        # the model returns a valid Profile
-make eval               # the query suite on the snapshot -> eval/results/report.md
-make down               # stop the services (data stays in the Docker volume)
-```
-
-API: `POST /runs {brief, client_key, session_id?}` -> run and session ids; `GET /runs/{id}/events`
-streams `state`, `progress`, `card` and one of `done`/`clarify`/`error` (resumes with `Last-Event-ID`);
-`GET /runs/{id}/trace` returns the spans. A reply or refinement is a new run in the same session.
-
-Evaluate on the frozen snapshot (no network; see `docs/evaluation.md`):
-
-```bash
-make snapshot-import    # load data/snapshot-<date>.tar.zst into Postgres
-make eval               # B0, B1 and FlatJai over the suite, then eval/results/report.md
-make eval SYSTEMS=flatjai REPEAT=3
-```
-
-Qwen 27B on TACC: `scripts/run-e3.sh` runs the suite inside TACC (the service URL is cluster-internal); see `docs/tacc.md`.
-
-## Layout
-| Path | What |
+| Stage | What happens |
 |---|---|
-| `backend/` | FastAPI app, agent loop, model client, tools |
-| `web/` | Next.js UI: brief, live progress, verified cards |
-| `data/` | the frozen snapshot (`snapshot-<date>.tar.zst`) |
-| `eval/` | query suite, baselines, scorer, results |
-| `scripts/` | snapshot export and import, E2 and E3 runners (`run-e2.sh`, `run-e3.sh`) |
-| `infra/tacc/` | TACC bundle and client job for the 27B runs |
-| `infra/grafana/` | observability dashboard: data source, `build_dashboard.py` -> `dashboards/flatjai.json` |
-| `infra/searxng/` | SearXNG settings (JSON API on) |
-| `docs/` | decisions (`decisions/`) and `BUILD_LOG.md` |
+| Understand | The brief becomes a typed profile. If the budget or campus is missing, the agent asks one question. |
+| Plan | The model picks areas and search terms within reach of the campus. |
+| Search | SearXNG finds listing pages on sites FlatJai is allowed to read. |
+| Read | Each page is fetched politely, the listing extracted with a quote for every field, the quotes checked against the page, the cost computed and the commute routed. |
+| Match | Code checks every hard limit and removes duplicates listed on several sites. |
+| Reflect | Enough good homes? If not, read more or search somewhere else. |
+| Answer | The model ranks and explains; code removes any claim it cannot back. |
 
-## Backend modules
-| Module | Role |
+The full design (data flow, storage, resume, tracing, code map) is in
+[docs/architecture.md](docs/architecture.md).
+
+## Run it on your machine
+
+### What you need
+
+| | Minimum | Notes |
+|---|---|---|
+| OS | macOS, Linux, or Windows 11 with WSL2 | On Windows everything runs inside WSL2 (Ubuntu) |
+| Memory | 16 GB RAM | The 8B model uses ~6 GB; Docker needs ~6 GB with the route planner |
+| Disk | ~15 GB free | Model 5 GB, Docker images, the Hong Kong map and transit data |
+| GPU | not needed | Apple Silicon and NVIDIA GPUs make the model faster |
+
+Software: [Docker](https://docs.docker.com/get-docker/), [uv](https://docs.astral.sh/uv/),
+[Node.js](https://nodejs.org) 20.9 or newer, zstd, git and [Ollama](https://ollama.com).
+
+### 1. Install the tools
+
+<details open>
+<summary><b>macOS</b> (with Homebrew)</summary>
+
+```bash
+brew install --cask docker        # then open Docker Desktop once
+brew install uv node zstd git ollama
+```
+</details>
+
+<details>
+<summary><b>Linux</b> (Ubuntu or Debian)</summary>
+
+```bash
+# Docker Engine: https://docs.docker.com/engine/install/ubuntu/ , then let your user run it:
+sudo usermod -aG docker $USER && newgrp docker
+sudo apt update && sudo apt install -y zstd git curl
+curl -LsSf https://astral.sh/uv/install.sh | sh
+curl -fsSL https://ollama.com/install.sh | sh
+# Node 20.9 or newer: https://nodejs.org/en/download
+```
+</details>
+
+<details>
+<summary><b>Windows</b> (WSL2)</summary>
+
+1. In PowerShell as administrator: `wsl --install -d Ubuntu`, then restart.
+2. Install [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/) and turn on
+   *Settings > Resources > WSL integration* for Ubuntu.
+3. Open the Ubuntu terminal and follow the **Linux** steps above, skipping Docker Engine.
+4. Clone the repository inside WSL (for example in `~/flatjai`), not under `/mnt/c`: it is much faster.
+</details>
+
+### 2. Set up FlatJai (one command)
+
+```bash
+git clone https://github.com/BhanuRana/flatjai.git
+cd flatjai
+./setup.sh
+```
+
+`setup.sh` checks every tool and tells you how to install anything missing. It then:
+
+1. creates `.env`;
+2. installs the Python and web dependencies;
+3. starts Postgres, SearXNG, OpenTripPlanner and Grafana in Docker;
+4. loads the frozen market snapshot (460 listing pages);
+5. builds the Hong Kong transit graph (~2 min);
+6. downloads the model (~5 GB) and runs the tests.
+
+It is safe to run again, and it never overwrites your database.
+
+| Short on memory or disk? | |
 |---|---|
-| `model_client.py` | One OpenAI-compatible client: JSON-schema typed calls, one repair retry, max_tokens, call budget, spans (5) |
-| `agent/loop.py`, `agent/state.py` | The seven-stage state machine, budgets, saved state (4) |
-| `agent/understand.py` | Brief -> Profile, numbers grounded in the brief; whether to ask (4) |
-| `agent/plan.py`, `agent/gather.py`, `agent/read.py` | Plan queries, search and expand list pages, fetch + extract + verify (4, 6) |
-| `agent/match.py`, `agent/reflect.py`, `agent/answer.py` | Hard checks, duplicates, relaxations; read more / re-plan / answer; ranked, checked answer (4) |
-| `agent/verify.py` | Every extracted fact must match a span on the fetched page (1, 10) |
-| `agent/events.py`, `agent/runs.py` | Numbered, persisted events; runs, sessions, idempotency, resume (9, 10) |
-| `tools/search.py`, `tools/fetch.py`, `tools/extract.py`, `tools/cost.py` | Tools with typed contracts (6) |
-| `tools/cache.py`, `storage/` | Page, search and extraction caches; Postgres store; blob store (7, 8) |
-| `agent/ask.py` | What to ask the agent: the listing's open questions as a copyable message (decision 0006) |
-| `tools/preview.py` | Rent and district from list-page cards and listing pages: skip what surely cannot fit before the model (decision 0005) |
-| `tools/geocode.py`, `tools/transit.py` | Place a home (Address Lookup Service) and estimate its commute by MTR or bus (6, decision 0005) |
-| `data/mtr.json`, `scripts/build_mtr.py` | MTR stations and lines from MTR Open Data and Wikipedia, built once |
-| `tracing.py` | Spans for stages, model and tool calls -> run inspector (13) |
+| `./setup.sh --no-otp` | Skip the route planner (saves ~4 GB of Docker memory). Commutes use an MTR-based estimate. |
+| `./setup.sh --no-model` | Skip the local model, then point FlatJai at another server (see [Models](#models)). |
 
-Decisions are in `docs/decisions/`.
+### 3. Start it
+
+In two terminals:
+
+```bash
+make dev        # API on http://localhost:8000 (docs at /docs)
+make web        # app on http://localhost:3000
+```
+
+| Open | What |
+|---|---|
+| http://localhost:3000 | FlatJai: write a brief, or tap one of the examples |
+| http://localhost:3001 | Metrics dashboard (Grafana, no login) |
+| http://localhost:8000/docs | API reference |
+
+`FJ_OFFLINE=1 make dev` uses only the frozen snapshot: no listing site is contacted, and results
+are repeatable. Stop the services with `make down`; your data stays in the Docker volume.
+
+### Models
+
+The model is chosen by `FJ_MODEL` in `.env`, from the profiles in `backend/models.yaml`:
+
+| Profile | Model | Where |
+|---|---|---|
+| `local` (default) | Qwen3 8B, 16K context | Ollama on your machine (`make model` builds it) |
+| `tacc` | Qwen3.8-27B, AWQ INT4 | vLLM on TACC GPUs, run as a batch job: [docs/tacc.md](docs/tacc.md) |
+
+Any OpenAI-compatible server works (LM Studio, vLLM, llama.cpp server): add a profile with its
+`base_url` and `model`, and set `FJ_MODEL` to its name. `make check-model` confirms the model returns
+valid structured output.
+
+## See what the agent did
+
+Every stage, model call and tool call is recorded. Open **Inspect** on any answer to see one run:
+
+![Run inspector: each stage, model call and tool call on a timeline, with timings and tokens](docs/images/run-inspector.png)
+
+The **Metrics** dashboard (Grafana, http://localhost:3001) covers every run, with Qwen 8B and 27B
+side by side. It shows outcomes, time per brief and per stage, model and tool latency, cache hits,
+and the scored evaluation. `make obs` loads the TACC runs and evaluation scores next to your own
+runs.
+
+![Grafana dashboard: runs, outcomes, time per brief, model calls and cache hits for 8B and 27B](docs/images/grafana.png)
+
+## Evaluation
+
+```bash
+make snapshot-import          # load the frozen market into Postgres (setup.sh does this once)
+make eval                     # B0, B1 and FlatJai over the suite -> eval/results/report.md
+make ablate                   # FlatJai with one part switched off at a time (E2)
+scripts/run-e3.sh             # the same suite on Qwen 27B inside TACC (E3)
+```
+
+![Within limits, invented facts and outcome for every system and ablation, on 8B and 27B](docs/images/quality.png)
+
+The suite (`eval/suite.yaml`) has 20 reviewed briefs in 7 categories: standard requests, missing
+information, impossible requests, Chinese and mixed-language briefs, ambiguous locations,
+multi-turn refinements and an adversarial brief. The scorer re-checks every shown home against its
+page with its own code. Results, ablations and their analysis: [docs/evaluation.md](docs/evaluation.md).
+Failures found on the way and how they were fixed: [docs/failure-analysis.md](docs/failure-analysis.md).
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `./setup.sh` | Everything from a fresh clone (safe to rerun) |
+| `make up` / `make down` | Start or stop Postgres, SearXNG, Grafana (and OpenTripPlanner once built) |
+| `make dev` / `make web` | API on :8000 with reload / app on :3000 |
+| `make test` | 194 tests: no model, network or database needed |
+| `make lint` | Ruff, ESLint and TypeScript |
+| `make check-model` | The active model returns a valid typed reply |
+| `make eval` / `make ablate` | The suite on the snapshot; ablations |
+| `make obs` | Load TACC runs and evaluation scores into the dashboard |
+| `make otp-graph` | Rebuild the transit graph (~2 min) |
+| `make snapshot` / `make snapshot-import` | Freeze the current cache / load a snapshot |
+
+## Project layout
+
+```
+backend/     FastAPI app and the agent: agent/ (one module per stage), tools/, storage/, tests/
+web/         Next.js app: brief, live progress, result cards with maps, run inspector
+eval/        query suite, baselines, scorer, results
+infra/       SearXNG, OpenTripPlanner, Ollama, Grafana, and the TACC job
+scripts/     snapshot export and import, experiment runners, MTR data builders
+data/        the frozen market snapshot
+docs/        architecture, evaluation, failure analysis, TACC guide, design decisions, build log
+```
+
+## Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| `setup.sh` says a port is in use | Something else holds 5432, 8888, 8080 or 3001. Stop it, or change the left-hand port in `compose.yaml`. |
+| Docker crashes or OTP never becomes healthy | Give Docker at least 6 GB (Docker Desktop > Settings > Resources), or run `./setup.sh --no-otp`. |
+| Briefs hit the time limit | The model is slow on this machine: close other heavy apps, restart Ollama, or raise `RUN_MAX_SECONDS` in `.env`. Tokens per second are on the dashboard. |
+| The app shows "Lost the connection" | `make dev` is not running, or stopped with an error: check its terminal. |
+| Old styles after pulling changes | Stop `make web`, run `rm -rf web/.next`, start it again. |
+
+## Documentation
+
+- [Architecture](docs/architecture.md): the system, one run end to end, the agent loop, where each fact comes from
+- [Evaluation](docs/evaluation.md): suite, baselines, metrics, results of E1, E2 and E3
+- [Failure analysis](docs/failure-analysis.md): what went wrong during development and the fix for each
+- [TACC](docs/tacc.md): running the suite on Qwen 27B on the course GPUs
+- [Design decisions](docs/decisions/): one short record per decision
+- [Build log](docs/build-log.md): dated development journal

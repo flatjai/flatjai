@@ -67,7 +67,7 @@ if [ "$WITH_OTP" = 1 ]; then
 fi
 
 # ports the stack needs, unless our own containers already hold them
-for port in 5432 8888 8080; do
+for port in 5432 8888 8080 3001; do
   [ "$port" = 8080 ] && [ "$WITH_OTP" = 0 ] && continue
   has lsof || break
   holder=$(lsof -iTCP:"$port" -sTCP:LISTEN -Pn 2>/dev/null | awk 'NR>1{print $1}' | grep -v -e docker -e com.docke -e vpnkit | head -1 || true)
