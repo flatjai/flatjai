@@ -9,6 +9,12 @@ on an actual bus and MTR route, where the listing came from, and why it fits.
 
 <table>
   <tr>
+    <td colspan="2"><img src="docs/images/landing.png" alt="FlatJai's landing page: Jai, the headline 'Find a home in Hong Kong, without the guesswork.', a box for the brief and three example briefs"></td>
+  </tr>
+  <tr>
+    <td colspan="2">Write what you need in plain words, or start from an example.</td>
+  </tr>
+  <tr>
     <td width="50%"><img src="docs/images/live-progress.png" alt="FlatJai working through a brief: understood, planned, searched, read 22 listings, 4 homes fit"></td>
     <td width="50%"><img src="docs/images/commute-map.png" alt="A shortlisted room: HK$5,100 a month, 38 minutes to HKUST, its route on a map, every limit checked"></td>
   </tr>
