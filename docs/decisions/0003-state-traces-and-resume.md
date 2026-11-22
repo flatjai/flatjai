@@ -3,7 +3,7 @@
 Date: 2026-11-16 · Status: accepted
 
 ## Decision
-- Tables per design section 7 (`storage/models.py`, Alembic migrations in `backend/migrations/`):
+- Tables (`storage/models.py`, Alembic migrations in `backend/migrations/`):
   sessions, messages, runs, events, pages, listings, shortlist_items, spans, cache.
 - The agent loop is a state machine (`agent/loop.py`). After every stage it saves `RunState` (JSON)
   and the finished spans. Every SSE event is written before subscribers see it.

@@ -1,6 +1,8 @@
 # Evaluation
 
-The query suite, the baselines, the scorer and the results of experiments E1 (systems), E2 (ablations) and E3 (Qwen 27B on TACC). The code lives in `eval/`.
+The query suite, the baselines, the frozen snapshot, the scorer and the results of experiments E1
+(FlatJai against two baselines), E2 (ablations) and E3 (Qwen 27B on TACC). The code lives in `eval/`.
+Failures the suite found and their fixes: [failure-analysis.md](failure-analysis.md).
 
 | File | What it is |
 |---|---|
@@ -8,6 +10,25 @@ The query suite, the baselines, the scorer and the results of experiments E1 (sy
 | `eval/run_suite.py` | Runs one system over the suite and writes one JSON line per case to `eval/results/` |
 | `eval/score.py` | Scores result files with its own code and writes `eval/results/report.md` |
 | `eval/understand_check.py` | The Understand stage alone: briefs to expected profile fields (`make eval-understand`) |
+
+## The suite
+
+`eval/suite.yaml` holds 20 reviewed briefs in 7 categories. Each case gives the turns the student types,
+the student's hard limits as we read the brief (`truth`: budget, share, campus, commute, room or flat,
+bedrooms) and what a good answer does (`expect`: ask first or not, minimum homes, relaxations when
+nothing fits, expected profile fields). The labels were written by hand before any scoring.
+
+| Category | Cases | What it tests |
+|---|---|---|
+| standard | 6 | complete briefs for each campus, rooms, studios and shared flats |
+| missing info | 3 | budget or campus missing: one useful question, then the search |
+| infeasible | 3 | nothing can fit: say so, propose concrete relaxations, invent nothing |
+| mixed language | 3 | Cantonese, Chinese and English mixed in one brief |
+| ambiguous location | 2 | stations and estate names instead of a campus or district |
+| adversarial | 1 | instructions inside the brief must not change the facts |
+| multi-turn | 2 | a refinement updates the profile and the shortlist |
+
+Cases 21 to 50 are drafts; see [Draft cases](#draft-cases).
 
 ## Systems
 
@@ -18,7 +39,72 @@ The query suite, the baselines, the scorer and the results of experiments E1 (sy
 All three use the active model profile (`FJ_MODEL`), so a comparison is about the system, not the model.
 B0 and B1 get all turns joined into one brief and cannot ask a question.
 
-## Ablations (E2)
+## Frozen snapshot
+
+A live run caches every page, search, extraction, geocode and OTP journey in Postgres. With
+`FJ_OFFLINE=1` FlatJai reads only that cache: a page never seen is "not in the snapshot", and a search
+never seen gets the cached results of the most similar earlier query for the same site. So a suite run
+on the snapshot never touches a listing site, and two runs see the same market.
+
+```
+make snapshot            # cache -> data/snapshot-<date>.tar.zst (pages, extractions, tool answers)
+make snapshot-import     # a fresh clone loads it (SNAPSHOT=file for an older one)
+make eval-score          # rescore the latest result of each system
+```
+
+The snapshot is recorded by one live pass: `FJ_OFFLINE=0 uv run python ../eval/run_suite.py --system flatjai --tag record`.
+
+## What the scorer checks (all in code, none from the agent's own checks)
+
+| Metric | Definition |
+|---|---|
+| Constraint satisfaction | shown homes with no limit broken / shown homes. A limit is broken only when the fact is known and fails; an unknown fact (no bedroom count) is counted separately |
+| All limits confirmed | shown homes with every limit known and met / shown homes |
+| Invented facts | shown rents and sizes not found on the home's page in the snapshot, plus summary figures (HK$, minutes) that match no card, budget, relaxation or difference of two of these, / all such figures |
+| Invented listings | shown homes whose page is not in the snapshot / shown homes |
+| Correct ask/no-ask | the first turn asks a question exactly when the brief is missing something essential |
+| Outcome ok | enough homes; for an infeasible brief, no home that breaks a limit and, when empty, concrete relaxations |
+
+Rules worth knowing: a whole flat also serves an own-room brief (not the other way round), the same
+rule the agent uses; a room counts as known only when its page says so or gives a bedroom count. The
+rules are pinned by `backend/tests/test_eval_score.py`.
+
+## E1: FlatJai against two baselines (2026-11-20, Qwen3 8B local, snapshot, 20 briefs x 3)
+
+Does the full agent beat the same model used alone (B0) or with one search (B1)? All three systems
+run on the same model and the same frozen snapshot, and the scorer checks every shown home itself.
+
+```
+make eval REPEAT=3                # b0, b1 and flatjai offline, then eval/results/report.md
+```
+
+Full tables: `eval/results/report.md`. Failures found on the way and their fixes: `docs/failure-analysis.md`.
+
+| | B0 model only | B1 search + answer | FlatJai |
+|---|---|---|---|
+| Invented facts | 85% | 44% | **0%** |
+| Invented listings | 100% | 0% | **0%** |
+| Constraint satisfaction | 100%* | 71% | **100%** |
+| All limits confirmed | 100%* | 36% | 52% |
+| Correct ask/no-ask | 85% | 85% | **100%** |
+| Outcome ok | 12% | 15% | **100%** |
+| Homes per brief | 0.6 | 0.7 | 3.5 |
+| Seconds per brief (median) | 2.8 | 8.1 | 26.3 |
+
+\* B0's homes do not exist (every one is an invented listing), so its "limits met" are its own claims.
+
+Reading it: on most briefs Qwen 8B alone declines to name homes, and when it does, they are made
+up. B1 reads real pages but cannot check a commute, so it mostly declines too; when it answers, it
+offers rooms for flat briefs and figures not on the page. FlatJai meets every hard limit it can
+check and shows no figure that is not on its source page. "All limits confirmed" is 52% because many
+pages do not say whether a home is a room (94 of 207 unknown) or how many bedrooms a flat has (36 of
+39 unknown): FlatJai shows these as "?" and puts them in "What to ask the agent".
+
+
+## E2: ablations
+
+What does each part of the agent earn? Each ablation switches one part off and reruns the suite.
+
 
 `FJ_ABLATE` (or `run_suite.py --ablate`) switches off one agent part; see `backend/src/flatjai/agent/ablations.py`.
 
@@ -52,7 +138,13 @@ with intervals: `eval/results/report.md`.
 
 ## E3: Qwen3.8-27B on TACC (2026-11-22, 20 briefs x 1, snapshot)
 
-Run inside TACC with `scripts/run-e3.sh` (see `docs/tacc.md`); report: `eval/results/report-tacc.md`.
+Does the result hold on a larger model? The same suite on the course's Qwen3.8-27B, run inside TACC
+(the service is reachable only from the cluster; see [tacc.md](tacc.md)):
+
+```
+./run.sh tacc                                   # FlatJai, B1, B0 -> eval/results/report-tacc.md
+SYSTEMS="flatjai-model_facts" ./run.sh tacc     # the model_facts ablation on 27B
+```
 
 | Metric | B0 | B1 | FlatJai | FlatJai, model_facts |
 |---|---|---|---|---|
@@ -75,69 +167,14 @@ snapshot. `make eval` skips them. To add them: review each `truth`, record their
 pass (`FJ_OFFLINE=0 uv run python ../eval/run_suite.py --system flatjai --drafts --tag record`),
 `make snapshot`, then drop the `status` lines.
 
-## Frozen snapshot
-
-A live run caches every page, search, extraction, geocode and OTP journey in Postgres. With
-`FJ_OFFLINE=1` FlatJai reads only that cache: a page never seen is "not in the snapshot", and a search
-never seen gets the cached results of the most similar earlier query for the same site. So a suite run
-on the snapshot never touches a listing site, and two runs see the same market.
-
-```
-make snapshot            # cache -> data/snapshot-<date>.tar.zst (pages, extractions, tool answers)
-make snapshot-import     # a fresh clone loads it (SNAPSHOT=file for an older one)
-make eval                # b0, b1, flatjai offline on the snapshot, then the report
-make eval SYSTEMS=flatjai REPEAT=3
-make eval-score          # rescore the latest result of each system
-```
-
-The snapshot is recorded by one live pass: `FJ_OFFLINE=0 uv run python ../eval/run_suite.py --system flatjai --tag record`.
-
-## What the scorer checks (all in code, none from the agent's own checks)
-
-| Metric | Definition |
-|---|---|
-| Constraint satisfaction | shown homes with no limit broken / shown homes. A limit is broken only when the fact is known and fails; an unknown fact (no bedroom count) is counted separately |
-| All limits confirmed | shown homes with every limit known and met / shown homes |
-| Invented facts | shown rents and sizes not found on the home's page in the snapshot, plus summary figures (HK$, minutes) that match no card, budget, relaxation or difference of two of these, / all such figures |
-| Invented listings | shown homes whose page is not in the snapshot / shown homes |
-| Correct ask/no-ask | the first turn asks a question exactly when the brief is missing something essential |
-| Outcome ok | enough homes; for an infeasible brief, no home that breaks a limit and, when empty, concrete relaxations |
-
-Rules worth knowing: a whole flat also serves an own-room brief (not the other way round), the same
-rule the agent uses; a room counts as known only when its page says so or gives a bedroom count. The
-rules are pinned by `backend/tests/test_eval_score.py`.
-
-## Results (2026-11-20, Qwen3 8B local, frozen snapshot, 20 briefs x 3 repeats)
-
-Full tables: `eval/results/report.md`. Failures found on the way and their fixes: `docs/failure-analysis.md`.
-
-| | B0 model only | B1 search + answer | FlatJai |
-|---|---|---|---|
-| Invented facts | 85% | 44% | **0%** |
-| Invented listings | 100% | 0% | **0%** |
-| Constraint satisfaction | 100%* | 71% | **100%** |
-| All limits confirmed | 100%* | 36% | 52% |
-| Correct ask/no-ask | 85% | 85% | **100%** |
-| Outcome ok | 12% | 15% | **100%** |
-| Homes per brief | 0.6 | 0.7 | 3.5 |
-| Seconds per brief (median) | 2.8 | 8.1 | 26.3 |
-
-\* B0's homes do not exist (every one is an invented listing), so its "limits met" are its own claims.
-
-Reading it: on most briefs Qwen 8B alone declines to name homes, and when it does, they are made
-up. B1 reads real pages but cannot check a commute, so it mostly declines too; when it answers, it
-offers rooms for flat briefs and figures not on the page. FlatJai meets every hard limit it can
-check and shows no figure that is not on its source page. "All limits confirmed" is 52% because many
-pages do not say whether a home is a room (94 of 207 unknown) or how many bedrooms a flat has (36 of
-39 unknown): FlatJai shows these as "?" and puts them in "What to ask the agent".
-
-Times are on the snapshot with cached extractions; a live run on the laptop takes 20 to 210 s.
-
 ## Limits of this evaluation
 
 - Commute is checked against the commute FlatJai shows (OpenTripPlanner on open data), not against
   journeys timed by hand. The OTP feed's MTR running times are fitted to timetable times
   (`scripts/build_mtr_gtfs.py`).
 - B0 and B1 commutes are the model's own claims; they are scored as claimed.
-- 20 cases, so intervals are wide. Precision@5 against hand labels and the LLM-judged explanation
-  quality from the design are not built yet.
+- 20 cases, so intervals are wide. Precision@5 against hand labels and an LLM-judged explanation
+  score are planned, not built.
+- E1 ran 3 repeats; E2 and E3 ran once each, so their smaller differences (no_dedup, no_reflect)
+  are within run-to-run variance of a small model (see failure 5 in [failure-analysis.md](failure-analysis.md)).
+- Times are on the snapshot with cached extractions. A live run on the laptop takes 20 to 210 s.

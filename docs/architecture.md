@@ -28,8 +28,10 @@ flowchart TB
 ```
 
 Everything runs on one machine with free components: Postgres, SearXNG, OpenTripPlanner and Grafana
-in Docker (`compose.yaml`), the model in Ollama, the API and UI from `make dev` and `make web`.
-The same code runs against Qwen3.8-27B on TACC by switching the model profile (`FJ_MODEL=tacc`).
+in Docker (`compose.yaml`), the model in Ollama, the API and UI started together by `./run.sh local`.
+The same code runs against Qwen3.8-27B on TACC: the suite as a TACC job (`./run.sh tacc`), or the
+app here with the model forwarded through an SSH tunnel (`./run.sh local --tacc`, profile
+`tacc-tunnel`). See [tacc.md](tacc.md).
 
 ## One run, end to end
 
@@ -127,8 +129,8 @@ snapshot of the market (`data/snapshot-*.tar.zst`) and never touches a listing s
 `model_client.py` is the only way to call a model. `typed_call()` sends a JSON schema generated from
 a Pydantic class, validates the reply and gives the model one repair retry with the validation
 error. It speaks the OpenAI-compatible API, so Ollama, LM Studio and vLLM all work; profiles live
-in `backend/models.yaml`: `local` (Qwen3 8B, 16K context, thinking off) and `tacc` (Qwen3.8-27B,
-AWQ INT4 on 2 GPUs).
+in `backend/models.yaml`: `local` (Qwen3 8B, 16K context, thinking off), `tacc` (Qwen3.8-27B,
+AWQ INT4 on 2 GPUs, used inside TACC) and `tacc-tunnel` (the same service through the tunnel).
 
 ## Storage
 
@@ -165,5 +167,5 @@ Every span is in Postgres, so two views read the same data:
 | `web/src/` | Next.js UI: brief, live progress, cards with map, run inspector |
 | `eval/` | the query suite, baselines B0 and B1, the scorer |
 | `infra/` | SearXNG, OpenTripPlanner, Ollama, Grafana and the TACC job |
-| `scripts/` | snapshot export and import, E2 and E3 runners, MTR data builders |
+| `scripts/` | snapshot export and import, E2 and E3 runners, the TACC tunnel, MTR data builders |
 | `docs/decisions/` | the design decisions, one file each |

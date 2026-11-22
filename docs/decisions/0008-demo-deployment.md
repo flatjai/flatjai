@@ -22,7 +22,7 @@ terms do not allow at scale.
   organisation named `flatjai` (the name was free on 2026-11-20) and host the repo, or a small
   `flatjai.github.io` repo for the built site, there. Either way costs nothing.
 - GitHub Pages on a free plan needs a public repo. Before making it public: review history for
-  private details (CLAUDE.md names coursework paths and the TACC user; `.env` is ignored), or keep
+  private details (coursework paths and the TACC user; `.env` is ignored), or keep
   the code private and publish only the built site from a separate public repo.
 - The Next.js app is built as a static export (`output: "export"`) and deployed by a GitHub Action
   on push (free for public repos).
@@ -48,7 +48,7 @@ terms do not allow at scale.
 ## Where the final code lives (Bhanu's plan, 2026-11-20)
 - After the work is finished, Bhanu creates the free GitHub organisation `flatjai` and, in it, a
   separate final repo with a clean, iterative history of the project as a team, rebuilt step by step
-  from this private repo (the way DuraLedger was rebuilt from its private build). This repo stays
+  from this private repo. This repo stays
   the private working copy.
 - The org also holds `flatjai.github.io`, where a GitHub Action publishes the built static site.
 - Authorship in the final history should match who did each part (each teammate commits their own

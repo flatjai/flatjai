@@ -249,7 +249,7 @@ shows every stage, model call and tool call of the run.
 | **E3** 27B on TACC | C3, C4 | FlatJai, B1, B0 and `model_facts` on Qwen3.8-27B | `./run.sh tacc` | ~15 min plus queueing | `eval/results/report-tacc.md` | Table 3 |
 | Understand stage | (seed check) | briefs to expected profile fields | `make eval-understand` | ~2 min | terminal | – |
 
-Table 1 is the E1 table in [docs/evaluation.md](docs/evaluation.md) ("Results"), Table 2 the E2
+Table 1 is the E1 table in [docs/evaluation.md](docs/evaluation.md), Table 2 the E2
 table ("E2 results"), Table 3 the E3 table, and Figure 1 is `docs/images/quality.png` (within
 limits, invented facts and outcome for every system and ablation, on 8B and 27B). The full tables
 with 95% bootstrap intervals and per-category breakdowns are in `eval/results/report.md` and
@@ -473,8 +473,8 @@ docs/        architecture, evaluation, failure analysis, TACC guide, design deci
 ## Documentation
 
 - [Architecture](docs/architecture.md): the system, one run end to end, the agent loop, where each fact comes from
-- [Evaluation](docs/evaluation.md): suite, baselines, metrics, results of E1, E2 and E3
+- [Evaluation](docs/evaluation.md): suite, baselines, snapshot, metrics, results of E1, E2 and E3
 - [Failure analysis](docs/failure-analysis.md): what went wrong during development and the fix for each
-- [TACC](docs/tacc.md): running the suite on Qwen 27B on the course GPUs
+- [TACC](docs/tacc.md): Qwen 27B on the course GPUs, for the suite (E3) or the app through a tunnel
 - [Design decisions](docs/decisions/): one short record per decision
 - [Build log](docs/build-log.md): dated development journal
