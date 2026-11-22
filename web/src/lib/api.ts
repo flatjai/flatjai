@@ -1,6 +1,8 @@
 // Client for the FlatJai request API. Types mirror backend/src/flatjai/{schemas,agent/state,tools/cost}.py.
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// the observability dashboard (Grafana, `make up` + `make obs`)
+export const METRICS_URL = process.env.NEXT_PUBLIC_METRICS_URL ?? "http://localhost:3001";
 
 export type Profile = {
   budget_hkd_month: number | null;

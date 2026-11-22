@@ -7,7 +7,7 @@ showing the real monthly and move-in cost, the commute to campus, the source of 
 Course project for CSIT6000V (HKUST, Fall 2026). Runs on a local model in development and on Qwen3.8-27B (vLLM) on TACC.
 
 ## Status
-M2: the full agent loop runs on live listings. Understand (asks one question if budget or campus is
+The full agent loop runs on live listings. Understand (asks one question if budget or campus is
 missing) -> Plan -> Search -> Read -> Match -> Reflect (re-plan or read more) -> Answer, streamed to
 the UI over server-sent events. Every figure is checked against its page and every hard limit in
 code; the answer's claims are checked against the facts. Runs, events and traces are stored in
@@ -23,6 +23,8 @@ E2: ablations (`make ablate`) show what each part earns: without the cost tool a
 understates every cost and 24% of shown homes break a limit; without re-planning fewer briefs end well.
 E3: the same suite on Qwen3.8-27B on TACC (`scripts/run-e3.sh`, `deploy/tacc/README.md`): 100% of
 shown homes within limits, 0% invented facts, 19 s per brief.
+Observability: a Grafana dashboard (`make obs`, http://localhost:3001) over the same traces: runs,
+time per stage, model and tool calls, cache hits and the scored suite, 8B and 27B side by side.
 Not yet: precision@5 against hand labels; briefs 21 to 50 are drafts.
 
 ## Run it
@@ -43,6 +45,9 @@ Then, in two terminals:
 make dev                # API on http://localhost:8000/docs (FJ_OFFLINE=1 make dev: snapshot only)
 make web                # UI on http://localhost:3000
 ```
+
+Metrics: `make up` also starts Grafana on http://localhost:3001 (no login). `make obs` loads the
+TACC runs and the scored suite beside the live traces (`./setup.sh` runs it once).
 
 Other commands:
 
@@ -74,8 +79,9 @@ Qwen 27B on TACC: `scripts/run-e3.sh` runs the suite inside TACC (the service UR
 | `web/` | Next.js UI: brief, live progress, verified cards |
 | `data/` | the frozen snapshot (`snapshot-<date>.tar.zst`) |
 | `eval/` | query suite, baselines, scorer, results |
-| `scripts/` | snapshot export and import |
-| `deploy/tacc/` | TACC job config |
+| `scripts/` | snapshot export and import, E2 and E3 runners (`run-e2.sh`, `run-e3.sh`) |
+| `deploy/tacc/` | TACC bundle and client job for the 27B runs |
+| `deploy/grafana/` | observability dashboard: data source, `build_dashboard.py` -> `dashboards/flatjai.json` |
 | `deploy/searxng/` | SearXNG settings (JSON API on) |
 | `docs/` | decisions (`decisions/`) and `BUILD_LOG.md` |
 

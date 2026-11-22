@@ -1,6 +1,6 @@
 "use client";
 
-import { ChatsCircle, ListMagnifyingGlass, Plus } from "@phosphor-icons/react";
+import { ChartLine, ChatsCircle, ListMagnifyingGlass, Plus } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from "react";
@@ -12,7 +12,7 @@ import { Hero } from "@/components/Hero";
 import { Jai, type JaiMood } from "@/components/Jai";
 import { ListingCard, ListingCardSkeleton } from "@/components/ListingCard";
 import { ThinkingTrace } from "@/components/ThinkingTrace";
-import { createRun, subscribeRun, type ChatDetail, type RunEvent } from "@/lib/api";
+import { createRun, METRICS_URL, subscribeRun, type ChatDetail, type RunEvent } from "@/lib/api";
 import { forgetChat, goToChat, loadChat, peekChat, refreshChats } from "@/lib/chats";
 import { buildChat, busy as isBusy, initialRun, orderedCards, runReducer, type RunState } from "@/lib/run-state";
 
@@ -216,6 +216,18 @@ function ChatPage() {
             <span className="text-sm text-faint">揾樓仔</span>
           </button>
           <nav className="ml-auto flex items-center gap-1">
+            {idle ? (
+              <a
+                href={METRICS_URL}
+                target="_blank"
+                rel="noreferrer"
+                title="Runs, stages, model and tool calls, and answer quality (Grafana)"
+                className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-muted hover:bg-raised hover:text-fg"
+              >
+                <ChartLine size={16} weight="bold" />
+                <span className="hidden sm:inline">Metrics</span>
+              </a>
+            ) : null}
             {idle ? <ChatMenu /> : null}
             {!idle && run.runId ? (
               <Link
