@@ -1,0 +1,16 @@
+# FlatJai's Postgres, read through the read-only login `grafana`, which sees only schema obs
+# (created by scripts/load_obs.py, `make obs`).
+apiVersion: 1
+datasources:
+  - name: FlatJai Postgres
+    uid: flatjai-pg
+    type: grafana-postgresql-datasource
+    url: postgres:5432
+    user: grafana
+    secureJsonData:
+      password: grafana
+    jsonData:
+      database: flatjai
+      sslmode: disable
+      postgresVersion: 1700
+    isDefault: true

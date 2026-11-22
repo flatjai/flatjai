@@ -118,6 +118,8 @@ elif [ -n "$snapshot" ]; then
 else
   warn "no data/snapshot-*.tar.zst found: FlatJai will start with an empty cache"
 fi
+(cd backend && uv run --frozen python ../scripts/load_obs.py >/dev/null 2>&1) \
+  && ok "dashboard data loaded (Grafana on http://localhost:3001)" || warn "dashboard data not loaded: run 'make obs' to see why"
 
 # --- 5. commute router ------------------------------------------------------------------------
 if [ "$WITH_OTP" = 1 ]; then
@@ -166,6 +168,7 @@ ${bold}${green}FlatJai is set up.${off} Run each in its own terminal:
 
   make dev        API on http://localhost:8000/docs
   make web        UI on  http://localhost:3000
+  Grafana         metrics on http://localhost:3001 (make obs refreshes the TACC and eval data)
 
   FJ_OFFLINE=1 make dev   the frozen snapshot only: no listing site is contacted
   make eval               the query suite on the snapshot (B0, B1, FlatJai) -> eval/results/report.md

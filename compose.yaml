@@ -36,5 +36,24 @@ services:
       interval: 5s
       retries: 60
 
+  grafana:   # observability dashboard on http://localhost:3001 (load its data first: make obs)
+    image: grafana/grafana:12.0.0
+    ports: ["3001:3000"]
+    depends_on: [postgres]
+    volumes:
+      - "./deploy/grafana/provisioning:/etc/grafana/provisioning:ro"
+      - "./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"       # local only: open without a login, as a viewer
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/flatjai.json
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 3s
+      retries: 30
+
 volumes:
   pgdata:

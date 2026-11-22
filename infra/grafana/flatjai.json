@@ -1,0 +1,2030 @@
+{
+  "uid": "flatjai",
+  "title": "FlatJai: agent observability",
+  "description": "Runs, stages, model and tool calls, and answer quality, from FlatJai's own traces in Postgres.",
+  "tags": [
+    "flatjai"
+  ],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "schemaVersion": 41,
+  "templating": {
+    "list": [
+      {
+        "name": "source",
+        "label": "Model",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "flatjai-pg"
+        },
+        "query": "SELECT DISTINCT source FROM obs.runs ORDER BY 1 DESC",
+        "definition": "SELECT DISTINCT source FROM obs.runs ORDER BY 1 DESC",
+        "refresh": 1,
+        "multi": true,
+        "includeAll": true,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      }
+    ]
+  },
+  "links": [
+    {
+      "title": "FlatJai",
+      "type": "link",
+      "url": "http://localhost:3000",
+      "targetBlank": true,
+      "icon": "external link"
+    }
+  ],
+  "panels": [
+    {
+      "type": "row",
+      "title": "Runs: every brief and reply, live from this laptop plus the TACC runs",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "id": 1,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Runs",
+      "description": "",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "flatjai-pg"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT source, count(*) AS value FROM obs.runs WHERE source IN ($source) AND $__timeFilter(started_at)  GROUP BY source ORDER BY source DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#ff8a5c"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": true,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^value$/"
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "text": {
+          "titleSize": 12,
+          "valueSize": 26
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "id": 2,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Shortlist returned",
+      "description": "",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "flatjai-pg"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT source, 100.0 * avg((status = 'done')::int) AS value FROM obs.runs WHERE source IN ($source) AND $__timeFilter(started_at)  GROUP BY source ORDER BY source DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#ff8a5c"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": true,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^value$/"
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "text": {
+          "titleSize": 12,
+          "valueSize": 26
+        }
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "id": 3,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Asked a question first",
+      "description": "The brief lacked a budget or campus, so the agent asked once instead of guessing.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "flatjai-pg"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT source, 100.0 * avg((status = 'needs_input')::int) AS value FROM obs.runs WHERE source IN ($source) AND $__timeFilter(started_at)  GROUP BY source ORDER BY source DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#ff8a5c"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": true,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^value$/"
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "text": {
+          "titleSize": 12,
+          "valueSize": 26
+        }
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "id": 4,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Errors",
+      "description": "",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "flatjai-pg"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT source, 100.0 * avg((status = 'error')::int) AS value FROM obs.runs WHERE source IN ($source) AND $__timeFilter(started_at)  GROUP BY source ORDER BY source DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#ff8a5c"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": true,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^value$/"
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "text": {
+          "titleSize": 12,
+          "valueSize": 26
+        }
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "id": 5,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Median time per brief",
+      "description": "",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "flatjai-pg"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT source, percentile_cont(0.5) WITHIN GROUP (ORDER BY seconds) AS value FROM obs.runs WHERE source IN ($source) AND $__timeFilter(started_at) AND status = 'done' AND seconds < 600 GROUP BY source ORDER BY source DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 1,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#ff8a5c"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": true,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^value$/"
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "text": {
+          "titleSize": 12,
+          "valueSize": 26
+        }
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "id": 6,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "p95 time per brief",
+      "description": "Runs stop at the 240 s budget (RUN_MAX_SECONDS) and answer with what they have.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "flatjai-pg"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT source, percentile_cont(0.95) WITHIN GROUP (ORDER BY seconds) AS value FROM obs.runs WHERE source IN ($source) AND $__timeFilter(started_at) AND status = 'done' AND seconds < 600 GROUP BY source ORDER BY source DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 1,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#ff8a5c"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": true,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^value$/"
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "text": {
+          "titleSize": 12,
+          "valueSize": 26
+        }
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "id": 7,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Model calls per run",
+      "description": "",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "flatjai-pg"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT source, count(*) FILTER (WHERE kind = 'model')::float / count(DISTINCT run_id) AS value FROM obs.spans WHERE source IN ($source) AND $__timeFilter(started_at)  GROUP BY source ORDER BY source DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 1,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#ff8a5c"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": true,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^value$/"
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "text": {
+          "titleSize": 12,
+          "valueSize": 26
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 4,
+        "h": 4
+      },
+      "id": 8,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Tokens per run",
+      "description": "",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "flatjai-pg"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT source, sum(tokens_in + tokens_out)::float / count(DISTINCT run_id) AS value FROM obs.spans WHERE source IN ($source) AND $__timeFilter(started_at)  GROUP BY source ORDER BY source DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#ff8a5c"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": true,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^value$/"
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "text": {
+          "titleSize": 12,
+          "valueSize": 26
+        }
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 5,
+        "w": 4,
+        "h": 4
+      },
+      "id": 9,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Output tokens / s",
+      "description": "Tokens written per second of model-call time, reading the prompt included (8B: Ollama on a 16 GB Mac; 27B: vLLM, AWQ INT4, 2 GPUs).",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "flatjai-pg"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT source, 1000.0 * sum(tokens_out) / nullif(sum(ms), 0) AS value FROM obs.spans WHERE source IN ($source) AND $__timeFilter(started_at) AND kind = 'model' AND tokens_out > 0 GROUP BY source ORDER BY source DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 1,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#ff8a5c"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": true,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^value$/"
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "text": {
+          "titleSize": 12,
+          "valueSize": 26
+        }
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 5,
+        "w": 4,
+        "h": 4
+      },
+      "id": 10,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Tool calls per run",
+      "description": "",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "flatjai-pg"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT source, count(*) FILTER (WHERE kind = 'tool')::float / count(DISTINCT run_id) AS value FROM obs.spans WHERE source IN ($source) AND $__timeFilter(started_at)  GROUP BY source ORDER BY source DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 1,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#ff8a5c"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": true,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^value$/"
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "text": {
+          "titleSize": 12,
+          "valueSize": 26
+        }
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 5,
+        "w": 4,
+        "h": 4
+      },
+      "id": 11,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Tool cache hits",
+      "description": "Searches, pages, geocodes and routes answered from the cache (the frozen snapshot in evaluation runs).",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "flatjai-pg"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT source, 100.0 * avg((attrs->>'cache' = 'hit')::int) AS value FROM obs.spans WHERE source IN ($source) AND $__timeFilter(started_at) AND kind = 'tool' GROUP BY source ORDER BY source DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#ff8a5c"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": true,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^value$/"
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "text": {
+          "titleSize": 12,
+          "valueSize": 26
+        }
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 5,
+        "w": 4,
+        "h": 4
+      },
+      "id": 12,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Replies repaired",
+      "description": "Typed calls whose first reply failed the JSON schema and needed the one repair retry.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "flatjai-pg"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT source, 100.0 * avg(((attrs->>'attempts')::int > 1)::int) AS value FROM obs.spans WHERE source IN ($source) AND $__timeFilter(started_at) AND kind = 'model' GROUP BY source ORDER BY source DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#ff8a5c"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": true,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^value$/"
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "text": {
+          "titleSize": 12,
+          "valueSize": 26
+        }
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 5,
+        "w": 4,
+        "h": 4
+      },
+      "id": 13,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Runs per hour by outcome",
+      "description": "",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "flatjai-pg"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroupAlias(started_at, '1h'), status AS metric, count(*) AS value FROM obs.runs WHERE source IN ($source) AND $__timeFilter(started_at) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "bars",
+            "pointSize": 5,
+            "lineWidth": 2,
+            "fillOpacity": 70,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "done"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "needs_input"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "error"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "running"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Qwen 8B (laptop)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#ff8a5c"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Qwen 27B (TACC)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5794f2"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 12,
+        "h": 8
+      },
+      "id": 14,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Time per brief (each dot is a run that returned a shortlist; resumed runs left out)",
+      "description": "",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "flatjai-pg"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "time_series",
+          "rawSql": "SELECT started_at AS time, source AS metric, seconds AS value FROM obs.runs WHERE source IN ($source) AND $__timeFilter(started_at) AND status = 'done' AND seconds < 600 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "points",
+            "pointSize": 5,
+            "lineWidth": 2,
+            "fillOpacity": 0
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "done"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "needs_input"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "error"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "running"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Qwen 8B (laptop)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#ff8a5c"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Qwen 27B (TACC)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5794f2"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 9,
+        "w": 12,
+        "h": 8
+      },
+      "id": 15,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "row",
+      "title": "Where the time goes: the seven stages",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 17,
+        "w": 24,
+        "h": 1
+      },
+      "id": 16,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "barchart",
+      "title": "Seconds per run in each stage (average)",
+      "description": "Read (fetch, extract and verify each new page) takes the most time on both models.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "flatjai-pg"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT name AS stage, sum(ms) FILTER (WHERE source = 'Qwen 8B (laptop)') / 1000.0 / nullif(count(DISTINCT run_id) FILTER (WHERE source = 'Qwen 8B (laptop)'), 0) AS \"Qwen 8B (laptop)\", sum(ms) FILTER (WHERE source = 'Qwen 27B (TACC)') / 1000.0 / nullif(count(DISTINCT run_id) FILTER (WHERE source = 'Qwen 27B (TACC)'), 0) AS \"Qwen 27B (TACC)\" FROM obs.spans WHERE kind = 'stage' AND parent_id IS NULL AND source IN ($source) AND $__timeFilter(started_at) GROUP BY name ORDER BY array_position(ARRAY['understand','plan','search','read','match','reflect','answer'], name::text)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 85,
+            "lineWidth": 0
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Qwen 8B (laptop)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#ff8a5c"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Qwen 27B (TACC)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5794f2"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "groupWidth": 0.75,
+        "barWidth": 0.9,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi"
+        },
+        "xTickLabelRotation": 0
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 10,
+        "h": 9
+      },
+      "id": 17,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Stage timings",
+      "description": "Median and p95 are per stage visit; a run can plan, read and reflect more than once.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "flatjai-pg"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT name AS \"Stage\", source AS \"Model\", sum(ms) / 1000.0 / count(DISTINCT run_id) AS \"Per run s\", percentile_cont(0.5) WITHIN GROUP (ORDER BY ms) / 1000 AS \"Median s\", percentile_cont(0.95) WITHIN GROUP (ORDER BY ms) / 1000 AS \"p95 s\", 100.0 * sum(ms) / sum(sum(ms)) OVER (PARTITION BY source) AS \"Share of time\" FROM obs.spans WHERE kind = 'stage' AND parent_id IS NULL AND source IN ($source) AND $__timeFilter(started_at) GROUP BY name, source ORDER BY source DESC, array_position(ARRAY['understand','plan','search','read','match','reflect','answer'], name::text)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*(?:(Per run|Median|p95) s$).*"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*(?:Share).*"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "gridPos": {
+        "x": 10,
+        "y": 18,
+        "w": 14,
+        "h": 9
+      },
+      "id": 18,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "row",
+      "title": "Model calls: every typed call through ModelClient",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 24,
+        "h": 1
+      },
+      "id": 19,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Model calls by purpose",
+      "description": "Cancelled: stopped on purpose, when enough homes were found or the time budget ran out.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "flatjai-pg"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT name AS \"Call\", source AS \"Model\", count(*) AS \"Calls\", percentile_cont(0.5) WITHIN GROUP (ORDER BY ms) / 1000 AS \"Median s\", percentile_cont(0.95) WITHIN GROUP (ORDER BY ms) / 1000 AS \"p95 s\", avg(tokens_in) AS \"Tokens in\", avg(tokens_out) AS \"Tokens out\", 1000.0 * sum(tokens_out) / nullif(sum(ms) FILTER (WHERE tokens_out > 0), 0) AS \"Tokens / s\", 100.0 * avg(((attrs->>'attempts')::int > 1)::int) AS \"Repaired\", 100.0 * avg((attrs->>'cancelled' IS NOT NULL)::int) AS \"Cancelled\" FROM obs.spans WHERE kind = 'model' AND source IN ($source) AND $__timeFilter(started_at) GROUP BY name, source ORDER BY source DESC, count(*) DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*(?:(Median|p95) s$).*"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*(?:^Tokens [io]).*"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*(?:Tokens / s).*"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*(?:Repaired|Cancelled).*"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 24,
+        "h": 9
+      },
+      "id": 20,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Output tokens per call-second over time",
+      "description": "A drop on the laptop means memory pressure: other apps running beside Ollama.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "flatjai-pg"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroupAlias(started_at, '1h'), source AS metric, 1000.0 * sum(tokens_out) / nullif(sum(ms), 0) AS value FROM obs.spans WHERE kind = 'model' AND tokens_out > 0 AND source IN ($source) AND $__timeFilter(started_at) GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "points",
+            "pointSize": 5,
+            "lineWidth": 2,
+            "fillOpacity": 0
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "done"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "needs_input"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "error"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "running"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Qwen 8B (laptop)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#ff8a5c"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Qwen 27B (TACC)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5794f2"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 37,
+        "w": 24,
+        "h": 8
+      },
+      "id": 21,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "row",
+      "title": "Tools: search, fetch, geocode, route, commute",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 45,
+        "w": 24,
+        "h": 1
+      },
+      "id": 22,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Tool calls",
+      "description": "Not in snapshot: an offline run asked for a page the frozen market never saw; it is skipped, never fetched.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "flatjai-pg"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT name AS \"Tool\", source AS \"Model\", count(*) AS \"Calls\", percentile_cont(0.5) WITHIN GROUP (ORDER BY ms) AS \"Median ms\", percentile_cont(0.95) WITHIN GROUP (ORDER BY ms) AS \"p95 ms\", 100.0 * avg((attrs->>'cache' = 'hit')::int) AS \"Cache hits\", count(*) FILTER (WHERE attrs->>'cache' = 'miss-offline') AS \"Not in snapshot\", count(*) FILTER (WHERE error IS NOT NULL) AS \"Errors\" FROM obs.spans WHERE kind = 'tool' AND source IN ($source) AND $__timeFilter(started_at) GROUP BY name, source ORDER BY source DESC, count(*) DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*(?:ms$).*"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*(?:Cache).*"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 46,
+        "w": 15,
+        "h": 9
+      },
+      "id": 23,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "barchart",
+      "title": "Cache hit rate by tool",
+      "description": "",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "flatjai-pg"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT name AS tool, 100.0 * avg((attrs->>'cache' = 'hit')::int) FILTER (WHERE source = 'Qwen 8B (laptop)') AS \"Qwen 8B (laptop)\", 100.0 * avg((attrs->>'cache' = 'hit')::int) FILTER (WHERE source = 'Qwen 27B (TACC)') AS \"Qwen 27B (TACC)\" FROM obs.spans WHERE kind = 'tool' AND attrs->>'cache' IS NOT NULL AND source IN ($source) AND $__timeFilter(started_at) GROUP BY name ORDER BY count(*) DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "fillOpacity": 85,
+            "lineWidth": 0
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Qwen 8B (laptop)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#ff8a5c"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Qwen 27B (TACC)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5794f2"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "groupWidth": 0.75,
+        "barWidth": 0.9,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi"
+        },
+        "xTickLabelRotation": 0
+      },
+      "gridPos": {
+        "x": 15,
+        "y": 46,
+        "w": 9,
+        "h": 9
+      },
+      "id": 24,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "row",
+      "title": "Answer quality: the scored suite (E1 systems, E2 ablations, E3 on 27B), same formulas as eval/score.py",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 55,
+        "w": 24,
+        "h": 1
+      },
+      "id": 25,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "barchart",
+      "title": "Within limits, invented facts and outcome by system",
+      "description": "8B: Qwen 8B on the laptop; 27B: Qwen 27B on TACC. b0: the model alone. b1: one search, the top pages, one answer. flatjai-X: FlatJai with part X switched off.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "flatjai-pg"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT CASE WHEN source LIKE '%27B%' THEN '27B ' ELSE '8B ' END || system AS system,  100.0 * (1 - sum(violated)::float / nullif(sum(homes), 0)) AS \"Within limits\", 100.0 * sum(confirmed)::float / nullif(sum(homes), 0) AS \"All limits confirmed\", 100.0 * (1 - sum(supported)::float / nullif(sum(facts), 0)) AS \"Invented facts\", 100.0 * avg(outcome_ok::int) AS \"Outcome ok\" FROM obs.eval GROUP BY source, system ORDER BY source DESC, array_position(ARRAY['flatjai','b1','b0'], system), system"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "fillOpacity": 85,
+            "lineWidth": 0
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Qwen 8B (laptop)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#ff8a5c"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Qwen 27B (TACC)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5794f2"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Within limits"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#73bf69"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "All limits confirmed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5794f2"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Invented facts"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#f2495c"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Outcome ok"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#ff8a5c"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "orientation": "vertical",
+        "showValue": "auto",
+        "groupWidth": 0.75,
+        "barWidth": 0.9,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi"
+        },
+        "xTickLabelRotation": 0
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 56,
+        "w": 24,
+        "h": 9
+      },
+      "id": 26,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Scored suite",
+      "description": "One row per scored brief and repeat (8B ran E1 three times); Median s is wall time per brief.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "flatjai-pg"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "SELECT source AS \"Model\", system AS \"System\", sum(homes) AS \"Homes shown\",  100.0 * (1 - sum(violated)::float / nullif(sum(homes), 0)) AS \"Within limits\", 100.0 * sum(confirmed)::float / nullif(sum(homes), 0) AS \"All limits confirmed\", 100.0 * (1 - sum(supported)::float / nullif(sum(facts), 0)) AS \"Invented facts\", 100.0 * avg(outcome_ok::int) AS \"Outcome ok\", 100.0 * sum(duplicates)::float / nullif(sum(homes), 0) AS \"Duplicates\", 100.0 * sum(cost_off)::float / nullif(sum(cost_figures), 0) AS \"Costs off the tool\", percentile_cont(0.5) WITHIN GROUP (ORDER BY seconds) AS \"Median s\" FROM obs.eval GROUP BY source, system ORDER BY source DESC, array_position(ARRAY['flatjai','b1','b0'], system), system"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*(?:Within|confirmed|Invented|Outcome|Duplicates|Costs).*"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*(?:Median s).*"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 65,
+        "w": 24,
+        "h": 12
+      },
+      "id": 27,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "row",
+      "title": "Slowest runs",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 77,
+        "w": 24,
+        "h": 1
+      },
+      "id": 28,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Slowest runs in the time range (click a run id to open its trace)",
+      "description": "Runs resumed after a restart (over 10 min) are left out. The run inspector (make web) holds laptop runs only; TACC runs live in eval/results/tacc-*/flatjai.db.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "flatjai-pg"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "format": "table",
+          "rawSql": "WITH m AS (SELECT run_id, count(*) FILTER (WHERE kind = 'model') AS calls, sum(tokens_in + tokens_out) AS tokens, count(*) FILTER (WHERE kind = 'tool') AS tools FROM obs.spans GROUP BY run_id) SELECT r.started_at AS \"Started\", r.source AS \"Model\", r.status AS \"Status\", r.seconds AS \"Seconds\", m.calls AS \"Model calls\", m.tools AS \"Tool calls\", m.tokens AS \"Tokens\", r.id AS \"Run\", r.brief AS \"Brief\" FROM obs.runs r LEFT JOIN m ON m.run_id = r.id WHERE r.source IN ($source) AND $__timeFilter(r.started_at) AND r.seconds < 600 ORDER BY r.seconds DESC NULLS LAST LIMIT 50"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*(?:Seconds).*"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*(?:Tokens).*"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Run"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open in the run inspector",
+                    "url": "http://localhost:3000/runs/${__value.raw}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 78,
+        "w": 24,
+        "h": 10
+      },
+      "id": 29,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "flatjai-pg"
+      }
+    }
+  ]
+}

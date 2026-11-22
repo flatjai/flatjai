@@ -1,7 +1,7 @@
 .PHONY: up down otp-data otp-graph model migrate dev web test lint check-model eval-understand ablate \
-	snapshot snapshot-import eval eval-score
+	snapshot snapshot-import eval eval-score obs
 
-up:            ## start Postgres and SearXNG (and OpenTripPlanner once its graph is built)
+up:            ## start Postgres, SearXNG and Grafana (and OpenTripPlanner once its graph is built)
 	docker compose $(if $(wildcard deploy/otp/data/graph.obj),--profile otp) up -d --wait
 
 OTP_DATA = deploy/otp/data
@@ -66,3 +66,6 @@ ablate:        ## E2: the suite offline with one agent part off at a time, then 
 
 eval-score:    ## score the latest offline result of each system -> eval/results/report.md
 	cd backend && uv run python ../eval/score.py $$(for s in $(SYSTEMS); do ls -t ../eval/results/*-$$s-offline.jsonl | head -1; done)
+
+obs:           ## load TACC runs and eval scores for the Grafana dashboard -> http://localhost:3001
+	cd backend && uv run python ../scripts/load_obs.py
